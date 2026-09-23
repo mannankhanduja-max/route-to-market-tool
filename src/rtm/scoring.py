@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from rtm.config import DIMENSIONS, Anchor, Route, Scenario
-from rtm.finance import Financials, RouteFinancials, run_financials
+from rtm.finance import Financials, RouteFinancials, revenue_retention, run_financials
 
 SCORE_MAX = 100.0
 
@@ -46,7 +46,7 @@ def metric_values(route: Route, base: RouteFinancials, downside: RouteFinancials
         "onboarding_months": route.onboarding_months,
         "run_rate_margin": base.run_rate_margin,
         "cumulative_margin": base.cumulative_margin,
-        "downside_revenue_retention": downside.total_revenue / base.total_revenue,
+        "downside_revenue_retention": revenue_retention(base, downside),
         "concentration_risk": route.concentration_risk,
         "partner_dependency": route.partner_dependency,
         "lock_in_months": route.lock_in_months,

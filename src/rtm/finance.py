@@ -149,6 +149,11 @@ def simulate_route(
     )
 
 
+def revenue_retention(base: RouteFinancials, downside: RouteFinancials) -> float:
+    """Share of base-case revenue kept in the downside case (0 if there is no base revenue)."""
+    return downside.total_revenue / base.total_revenue if base.total_revenue > 0 else 0.0
+
+
 @dataclass(frozen=True)
 class Financials:
     """Base-case and downside results for every route in a scenario."""

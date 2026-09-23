@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from rtm.config import DIMENSIONS, Scenario
-from rtm.finance import run_financials
+from rtm.finance import revenue_retention, run_financials
 from rtm.scoring import ScoreResult, score_routes
 
 
@@ -189,7 +189,7 @@ def downside_table(scenario: Scenario) -> pd.DataFrame:
                 "route": key,
                 "revenue_base": b.total_revenue,
                 "revenue_downside": d.total_revenue,
-                "retention": d.total_revenue / b.total_revenue,
+                "retention": revenue_retention(b, d),
                 "breakeven_base": b.projected_breakeven_month,
                 "breakeven_downside": d.projected_breakeven_month,
                 "peak_funding_base": b.peak_funding,

@@ -9,6 +9,7 @@ from rtm.finance import (
     RouteFinancials,
     partner_loss_curve,
     ramp_curve,
+    revenue_retention,
     run_financials,
     simulate_route,
 )
@@ -114,3 +115,10 @@ def test_higher_cac_delays_breakeven(scenario):
         replace(route, cac=route.cac * 5), scenario.market, scenario.horizon_months
     )
     assert dear.projected_breakeven_month > cheap.projected_breakeven_month
+
+
+def test_retention_is_zero_when_there_is_no_base_revenue(scenario):
+    route = replace(scenario.route("reseller"), reach=0.0)
+    base = simulate_route(route, scenario.market, scenario.horizon_months)
+    down = simulate_route(route, scenario.market, scenario.horizon_months, scenario.downside)
+    assert revenue_retention(base, down) == 0.0
