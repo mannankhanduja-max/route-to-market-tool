@@ -84,8 +84,10 @@ def test_ranking_is_complete_and_ordered(scenario):
 def test_all_weight_on_one_dimension_picks_that_dimension_leader(scenario):
     base = score_routes(scenario)
     for dim in DIMENSIONS:
-        weights = {d: float(d == dim) for d in DIMENSIONS}
-        result = score_routes(scenario.with_weights(weights))
+        shifted = scenario
+        for d in DIMENSIONS:
+            shifted = shifted.with_value(f"weights.{d}", float(d == dim))
+        result = score_routes(shifted)
         assert result.winner == base.dimension_scores[dim].idxmax()
 
 

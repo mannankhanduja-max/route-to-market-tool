@@ -184,10 +184,6 @@ class Scenario:
             return replace(self, **{head: replace(getattr(self, head), **{rest[0]: value})})
         raise KeyError(f"Unknown input path: {path}")
 
-    def with_weights(self, weights: dict[str, float]) -> Scenario:
-        """Return a copy with new dimension weights."""
-        return replace(self, weights=dict(weights))
-
     def input_paths(self) -> list[str]:
         """Dotted paths of every model input that a sensitivity test can move."""
         paths = [f"market.{f.name}" for f in fields(Market)]

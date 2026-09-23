@@ -80,6 +80,7 @@ def sidebar(base: Scenario) -> tuple[tuple[str, float], ...]:
 
     for route in base.routes:
         with st.sidebar.expander(route.label):
+            st.caption(route.description)
             for field, label, step, cap in ROUTE_SLIDERS:
                 value = float(getattr(route, field))
                 upper = 1.0 if cap is None else max(value * cap, step * 10)
