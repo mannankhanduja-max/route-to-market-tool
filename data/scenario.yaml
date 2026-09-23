@@ -1,0 +1,240 @@
+# Route-to-market scenario: every assumption the model uses lives in this file.
+#
+# Each input is a mapping with a `value` and a `source`. The source says where
+# the number comes from or why it was chosen. All figures are synthetic: they
+# describe a hypothetical company and do not refer to any real client.
+#
+# Money is in the currency named below. Time is in months from the go
+# decision (month 1 is the first month of spend).
+
+scenario:
+  name: "Mid-market B2B software company entering a new European country"
+  currency: EUR
+  horizon_months:
+    value: 36
+    source: "Brief: three-year view, the usual planning horizon for a market-entry case."
+
+market:
+  annual_market_size:
+    value: 150000000
+    source: "Synthetic. Annual spend on the product category in the target country, sized as ~5,000 mid-market buyers x EUR 30k."
+  target_share:
+    value: 0.06
+    source: "Synthetic. Share a new entrant could plausibly win within three years; a judgment call, tested in the tornado chart."
+  annual_price_per_customer:
+    value: 30000
+    source: "Synthetic. Annual contract value for a mid-market subscription; used to convert revenue into customer counts for CAC."
+  gross_margin:
+    value: 0.78
+    source: "Assumption. Subscription software gross margins are commonly 70-80% in public company filings; 78% sits inside that range."
+  annual_churn:
+    value: 0.10
+    source: "Assumption. 10% of customers lost per year; replacing them keeps paying CAC after the ramp ends."
+
+routes:
+  direct:
+    label: "Direct sales"
+    description: "Own local sales team selling straight to customers."
+    onboarding_months:
+      value: 4
+      source: "Assumption. Time to hire and train a local sales team of about ten people."
+    months_to_first_revenue:
+      value: 10
+      source: "Assumption. Onboarding plus a ~6-month enterprise sales cycle before the first contract bills."
+    ramp_months:
+      value: 24
+      source: "Assumption. A new direct team takes about two years to reach its full pipeline."
+    reach:
+      value: 1.0
+      source: "Definition. Direct sales can in principle address the whole target share (reference route = 100%)."
+    channel_take:
+      value: 0.0
+      source: "Definition. No intermediary, so no commission is paid away."
+    cac:
+      value: 35000
+      source: "Assumption. Direct acquisition cost per customer, about 1.2x first-year contract value."
+    fixed_setup_cost:
+      value: 1200000
+      source: "Assumption. Entity set-up, recruiting fees, office and localisation, paid in month 1."
+    monthly_fixed_cost:
+      value: 220000
+      source: "Assumption. Fully loaded cost of a ~10-person sales and support team plus local overhead."
+    concentration_risk:
+      value: 0.15
+      source: "Judgment (0 = spread, 1 = one point of failure). Revenue spread across many direct accounts."
+    partner_dependency:
+      value: 0.0
+      source: "Definition. No revenue flows through a third party."
+    lock_in_months:
+      value: 0
+      source: "Definition. No channel contract; the team can be resized at will."
+
+  reseller:
+    label: "Reseller network"
+    description: "A handful of local value-added resellers sell and support the product."
+    onboarding_months:
+      value: 5
+      source: "Assumption. Time to recruit, contract and certify three to five resellers."
+    months_to_first_revenue:
+      value: 8
+      source: "Assumption. Resellers sell into existing customer relationships, so the first deal comes ~3 months after onboarding."
+    ramp_months:
+      value: 18
+      source: "Assumption. Resellers reach full productivity faster than a new direct team but slower than one large partner."
+    reach:
+      value: 0.75
+      source: "Assumption. Resellers cover about three quarters of the target segment; some large accounts buy direct only."
+    channel_take:
+      value: 0.30
+      source: "Assumption. Reseller margin of 30% of list price, inside the 20-40% range usually quoted for software resale."
+    cac:
+      value: 8000
+      source: "Assumption. Market development funds, deal registration and enablement per new customer."
+    fixed_setup_cost:
+      value: 400000
+      source: "Assumption. Partner programme design, training material and certification, paid in month 1."
+    monthly_fixed_cost:
+      value: 90000
+      source: "Assumption. Two channel managers, a solutions engineer and partner marketing."
+    concentration_risk:
+      value: 0.35
+      source: "Judgment. A few resellers carry most of the volume."
+    partner_dependency:
+      value: 0.35
+      source: "Assumption. Share of revenue that comes through the largest single reseller."
+    lock_in_months:
+      value: 12
+      source: "Assumption. Typical one-year reseller agreement with a notice period."
+
+  partner:
+    label: "Strategic partner"
+    description: "One established local company bundles and resells the product under an exclusive deal."
+    onboarding_months:
+      value: 6
+      source: "Assumption. Negotiating, contracting and integrating an exclusive strategic partnership."
+    months_to_first_revenue:
+      value: 7
+      source: "Assumption. The partner cross-sells to its installed base within a month of launch."
+    ramp_months:
+      value: 12
+      source: "Assumption. The partner's existing sales force reaches full run-rate within a year."
+    reach:
+      value: 0.55
+      source: "Assumption. The partner's customer base covers just over half of the target segment."
+    channel_take:
+      value: 0.45
+      source: "Assumption. Revenue share for a partner that owns the customer relationship and first-line support."
+    cac:
+      value: 2000
+      source: "Assumption. Joint marketing per new customer; the partner carries most selling cost."
+    fixed_setup_cost:
+      value: 300000
+      source: "Assumption. Legal, technical integration and joint launch, paid in month 1."
+    monthly_fixed_cost:
+      value: 50000
+      source: "Assumption. Alliance manager, partner engineering support and joint marketing."
+    concentration_risk:
+      value: 0.60
+      source: "Judgment. One partner controls access to the customers; they sit in the partner's base, not ours."
+    partner_dependency:
+      value: 1.0
+      source: "Definition. All revenue flows through one partner."
+    lock_in_months:
+      value: 36
+      source: "Assumption. Exclusive three-year agreement, the usual price of partner commitment."
+
+downside:
+  market_shock:
+    value: -0.30
+    source: "Stress assumption. Market 30% smaller than planned, e.g. a sector downturn or a slower shift from incumbents."
+  partner_loss_month:
+    value: 18
+    source: "Stress assumption. The largest intermediary walks away at the half-way point of the horizon."
+  partner_loss_recovery_months:
+    value: 12
+    source: "Stress assumption. Time to replace the lost channel volume (new partner or direct cover)."
+
+weights:
+  velocity:
+    value: 0.40
+    source: "VMR framework default weight."
+  margin:
+    value: 0.35
+    source: "VMR framework default weight."
+  robustness:
+    value: 0.25
+    source: "VMR framework default weight."
+
+# Scoring: each metric is scaled to 0-100 between a `worst` anchor (0) and a
+# `best` anchor (100), then averaged inside its dimension with `weight`.
+# Anchors are fixed, not relative to the other routes, so a route's score
+# does not move when another route changes. The anchors are judgment calls.
+scoring:
+  velocity:
+    months_to_first_revenue:
+      best: 3
+      worst: 18
+      weight: 0.35
+      source: "Judgment. 3 months is as fast as any route realistically bills; 18 months means a lost year."
+    breakeven_month:
+      best: 12
+      worst: 60
+      weight: 0.45
+      source: "Judgment. Payback within a year is excellent; beyond five years the entry case fails most hurdle rates."
+    onboarding_months:
+      best: 0
+      worst: 12
+      weight: 0.20
+      source: "Judgment. Time before the route can sell at all; a year of set-up scores zero."
+  margin:
+    run_rate_margin:
+      best: 0.50
+      worst: 0.0
+      weight: 0.60
+      source: "Judgment. Profit per euro of revenue in the final month; 50% is best-in-class for a mature software channel."
+    cumulative_margin:
+      best: 0.25
+      worst: -0.50
+      weight: 0.40
+      source: "Judgment. 36-month cumulative cash over 36-month revenue; captures set-up and ramp costs."
+  robustness:
+    downside_revenue_retention:
+      best: 1.0
+      worst: 0.40
+      weight: 0.40
+      source: "Judgment. Share of base-case 36-month revenue kept in the downside case."
+    concentration_risk:
+      best: 0.0
+      worst: 1.0
+      weight: 0.20
+      source: "Scale defined in the route inputs."
+    partner_dependency:
+      best: 0.0
+      worst: 1.0
+      weight: 0.20
+      source: "Scale defined in the route inputs."
+    lock_in_months:
+      best: 0
+      worst: 36
+      weight: 0.20
+      source: "Judgment. A contract that binds for the full horizon scores zero."
+
+sensitivity:
+  tornado_swing:
+    value: 0.20
+    source: "Convention. Each input moved +/-20% one at a time."
+  weight_resolution:
+    value: 0.001
+    source: "Numerical. Step used to locate the weight at which the top route changes."
+  weight_map_step:
+    value: 0.05
+    source: "Numerical. Grid step for the map of all weight combinations."
+  flip_search_max:
+    value: 1.0
+    source: "Numerical. Largest change (+/-100%) searched when looking for the input value that flips the ranking."
+  flip_search_step:
+    value: 0.01
+    source: "Numerical. 1% steps in that search."
+  top_inputs:
+    value: 3
+    source: "Presentation. Number of inputs reported in the recommendation's 'stops winning' list."
