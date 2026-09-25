@@ -18,12 +18,14 @@ from matplotlib.ticker import FuncFormatter
 from rtm import fmt
 from rtm.config import DIMENSIONS, Scenario
 from rtm.finance import Financials
+from rtm.ml import MLResult
 from rtm.scoring import ScoreResult
 
 ROUTE_COLOURS = ("#2a78d6", "#eb6834", "#1baf7a")
 DIMENSION_SHADES = {"velocity": "#1c5cab", "margin": "#3987e5", "robustness": "#9ec5f4"}
 DIMENSION_TEXT = {"velocity": "#ffffff", "margin": "#ffffff", "robustness": "#0b0b0b"}
 LOW_SHADE, HIGH_SHADE = "#86b6ef", "#1c5cab"
+MODEL_COLOURS = {"Logistic regression": "#4a3aa7", "Random forest": "#eda100"}
 INK, INK_2, INK_3, GRID, SURFACE = "#0b0b0b", "#52514e", "#8f8d86", "#e4e2dc", "#fcfcfb"
 
 plt.rcParams.update(
@@ -248,3 +250,44 @@ def key_chart(scenario: Scenario, result: ScoreResult, fin: Financials) -> Figur
     plot_cash(right, scenario, fin)
     fig.tight_layout()
     return fig
+
+
+def plot_win_rates(ax: Axes, scenario: Scenario, ml: MLResult) -> None:
+    """Share of sampled scenarios in which each route ranks first."""
+    colours = route_colours(scenario)
+    order = ml.win_rates.sort_values().index
+    bars = ax.barh(
+        [scenario.label(k) for k in order],
+        ml.win_rates[order],
+        color=[colours[k] for k in order],
+        height=0.6,
+    )
+    ax.bar_label(bars, labels=[fmt.pct(v) for v in ml.win_rates[order]], padding=4, color=INK)
+    ax.set_xlim(0, 1)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: fmt.pct(v)))
+    ax.grid(axis="y", visible=False)
+    n, spread = len(ml.sample), fmt.pct(scenario.ml.input_range)
+    ax.set_title(f"Who wins across {n:,} scenarios (every input ±{spread})")
+
+
+def plot_ml_importance(ax: Axes, scenario: Scenario, ml: MLResult) -> None:
+    """Permutation importance of the top inputs for both models, side by side."""
+    rows = ml.importance.head(scenario.ml.top_features).iloc[::-1]
+    y = np.arange(len(rows))
+    height = 0.38
+    for offset, model in ((height / 2, "Logistic regression"), (-height / 2, "Random forest")):
+        ax.barh(
+            y + offset,
+            rows[f"{model} importance"],
+            height=height,
+            color=MODEL_COLOURS[model],
+            edgecolor=SURFACE,
+            linewidth=1,
+            label=f"{model} ({fmt.pct(ml.accuracy[model])} accurate)",
+        )
+    ax.set_yticks(y, rows.label)
+    ax.grid(axis="y", visible=False)
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v * 100:.0f} pts"))
+    ax.set_xlabel("Drop in accuracy when the input is shuffled")
+    ax.set_title("Which assumptions decide the winner")
+    ax.legend(loc="lower right", fontsize=8)

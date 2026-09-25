@@ -2,7 +2,8 @@
 
 Every slider starts at the value in data/scenario.yaml. Moving one re-runs
 the full model (finance, scoring, sensitivity, recommendation) on a copy of
-the scenario; the file itself is never changed.
+the scenario; the file itself is never changed. The machine-learning check
+runs only when switched on, since it samples and trains on thousands of draws.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import streamlit as st
 from rtm import charts, fmt
 from rtm.config import DIMENSIONS, Scenario, load_scenario
 from rtm.finance import run_financials
+from rtm.ml import model_table, run_ml_check
 from rtm.recommend import build_recommendation
 from rtm.scoring import score_routes, summary_table
 from rtm.sensitivity import downside_table, tornado, weight_map, weight_sweep
@@ -48,6 +50,12 @@ def analyse(overrides: tuple[tuple[str, float], ...]) -> dict:
         "map": weight_map(scenario, result),
         "downside": downside_table(scenario),
     }
+
+
+@st.cache_data(show_spinner=False)
+def machine_learning(overrides: tuple[tuple[str, float], ...], winner: str):
+    """Logistic regression and random forest check; slow, so run only on request."""
+    return run_ml_check(apply(load_scenario(), overrides), winner)
 
 
 def apply(scenario: Scenario, overrides: tuple[tuple[str, float], ...]) -> Scenario:
@@ -96,6 +104,37 @@ def figure(draw, *args, size=(7, 3.6)):
     return fig
 
 
+def machine_learning_tab(s: Scenario, result, overrides) -> None:
+    st.markdown(
+        f"Draws {s.ml.n_samples:,} scenarios with every input moved at once "
+        f"(±{fmt.pct(s.ml.input_range)}), labels each with the route the VMR model picks, "
+        "and trains a logistic regression and a random forest to predict that route. "
+        "The models learn this tool's logic, not real market data."
+    )
+    if not st.toggle("Run the machine-learning check (about 10 seconds)", key="run_ml"):
+        return
+    with st.spinner("Sampling scenarios and training both models..."):
+        ml = machine_learning(overrides, result.winner)
+    rates = ", ".join(f"{s.label(k)} {fmt.pct(v)}" for k, v in ml.win_rates.items())
+    st.markdown(f"**Share of scenarios each route wins:** {rates}.")
+    if not ml.trained:
+        st.info(
+            "One route wins (almost) every scenario, so there is too little variety for the "
+            "models to learn from."
+        )
+        return
+    c1, c2 = st.columns([1, 1.5])
+    c1.pyplot(figure(charts.plot_win_rates, s, ml, size=(6, 3.6)))
+    c2.pyplot(figure(charts.plot_ml_importance, s, ml, size=(8, 4.6)))
+    st.dataframe(model_table(s, ml).round(3), hide_index=True)
+    st.caption(
+        "Importance is the drop in held-out accuracy when an input is shuffled. "
+        "Direction is the logistic regression's standardised coefficient for the current "
+        "winner: positive means a higher value helps it stay on top."
+    )
+    st.dataframe(ml.importance.drop(columns="input").round(3), hide_index=True)
+
+
 def main() -> None:
     base = load_scenario()
     overrides = sidebar(base)
@@ -131,7 +170,16 @@ def main() -> None:
     left.pyplot(figure(charts.plot_scores, s, result))
     right.pyplot(figure(charts.plot_cash, s, fin, True))
 
-    tabs = st.tabs(["Recommendation", "Sensitivity", "Financials", "Workings", "Assumptions"])
+    tabs = st.tabs(
+        [
+            "Recommendation",
+            "Sensitivity",
+            "Machine learning",
+            "Financials",
+            "Workings",
+            "Assumptions",
+        ]
+    )
     with tabs[0]:
         st.markdown(rec.to_markdown())
     with tabs[1]:
@@ -145,6 +193,8 @@ def main() -> None:
         st.subheader("Downside case")
         st.dataframe(a["downside"].round(2), hide_index=True)
     with tabs[2]:
+        machine_learning_tab(s, result, overrides)
+    with tabs[3]:
         st.pyplot(figure(charts.plot_revenue, s, fin, size=(10, 3.4)))
         monthly = pd.concat(
             {
@@ -157,10 +207,10 @@ def main() -> None:
             axis=1,
         )
         st.dataframe(monthly.round(0))
-    with tabs[3]:
+    with tabs[4]:
         st.dataframe(a["summary"].round(1), hide_index=True)
         st.dataframe(result.workings.round(3), hide_index=True)
-    with tabs[4]:
+    with tabs[5]:
         paths = s.input_paths() + [f"weights.{d}" for d in DIMENSIONS]
         sources = pd.DataFrame(
             [(s.input_label(p), s.get(p), s.sources[p]) for p in paths],

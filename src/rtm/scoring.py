@@ -91,16 +91,8 @@ def combine(dimension_scores: pd.DataFrame, weights: dict[str, float]) -> pd.Ser
     return totals.sort_values(ascending=False, kind="stable").rename("total")
 
 
-def score_routes(
-    scenario: Scenario, financials: Financials | None = None, stressed: bool = False
-) -> ScoreResult:
-    """Score every route.
-
-    ``stressed=True`` scores Velocity and Margin on the downside financials
-    instead of the base case; Robustness is the same in both, since it
-    already compares the two cases.
-    """
-    fin = financials or run_financials(scenario)
+def _workings_rows(scenario: Scenario, fin: Financials, stressed: bool) -> list[dict]:
+    """One row per (route, metric): raw value, 0-100 score and weighted contribution."""
     rows = []
     for r in scenario.routes:
         view = fin.downside[r.key] if stressed else fin.base[r.key]
@@ -130,7 +122,20 @@ def score_routes(
                         "contribution": score * metric_weights[metric],
                     }
                 )
-    workings = pd.DataFrame(rows)
+    return rows
+
+
+def score_routes(
+    scenario: Scenario, financials: Financials | None = None, stressed: bool = False
+) -> ScoreResult:
+    """Score every route.
+
+    ``stressed=True`` scores Velocity and Margin on the downside financials
+    instead of the base case; Robustness is the same in both, since it
+    already compares the two cases.
+    """
+    fin = financials or run_financials(scenario)
+    workings = pd.DataFrame(_workings_rows(scenario, fin, stressed))
     dims = workings.pivot_table(
         index="route", columns="dimension", values="contribution", aggfunc="sum", sort=False
     )[list(DIMENSIONS)]
@@ -142,6 +147,19 @@ def score_routes(
         weights=weights,
         totals=combine(dims, weights),
     )
+
+
+def total_scores(scenario: Scenario) -> dict[str, float]:
+    """Weighted total per route, in scenario order, without building DataFrames.
+
+    Same arithmetic as :func:`score_routes`; used where thousands of
+    scenarios are scored (the machine-learning sample).
+    """
+    weights = normalise_weights(scenario.weights)
+    totals = dict.fromkeys(scenario.route_keys, 0.0)
+    for row in _workings_rows(scenario, run_financials(scenario), stressed=False):
+        totals[row["route"]] += row["contribution"] * weights[row["dimension"]]
+    return totals
 
 
 def summary_table(scenario: Scenario, result: ScoreResult) -> pd.DataFrame:

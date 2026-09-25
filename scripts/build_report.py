@@ -19,6 +19,7 @@ import pandas as pd
 from rtm import charts, fmt
 from rtm.config import load_scenario
 from rtm.finance import run_financials
+from rtm.ml import model_table, run_ml_check
 from rtm.recommend import build_recommendation
 from rtm.scoring import score_routes, summary_table
 from rtm.sensitivity import downside_table, tornado, weight_flips, weight_map, weight_sweep
@@ -37,7 +38,7 @@ def md_table(df: pd.DataFrame) -> str:
     return "\n".join([header, rule, *rows])
 
 
-def save_figures(s, fin, result, sweep, table, grid) -> None:
+def save_figures(s, fin, result, sweep, table, grid, ml) -> None:
     FIGURES.mkdir(parents=True, exist_ok=True)
     charts.key_chart(s, result, fin).savefig(FIGURES / "key_chart.png")
 
@@ -57,10 +58,17 @@ def save_figures(s, fin, result, sweep, table, grid) -> None:
     fig, ax = plt.subplots(figsize=(8, 3.8))
     charts.plot_cash(ax, s, fin, downside=True)
     fig.savefig(FIGURES / "cash_downside.png")
+
+    if ml.trained:
+        fig, (left, right) = plt.subplots(1, 2, figsize=(12, 4.4), width_ratios=[1, 1.5])
+        charts.plot_win_rates(left, s, ml)
+        charts.plot_ml_importance(right, s, ml)
+        fig.tight_layout()
+        fig.savefig(FIGURES / "ml_check.png")
     plt.close("all")
 
 
-def write_results(s, result, rec, table, flips, down) -> None:
+def write_results(s, result, rec, table, flips, down, ml) -> None:
     summary = summary_table(s, result).round(1)
     workings = result.workings.assign(
         route=lambda d: d.route.map(s.label), value=lambda d: d.value.round(3)
@@ -118,11 +126,50 @@ Breakeven months above {s.horizon_months} are projected past the horizon.
 
 {md_table(down)}
 
+## Machine-learning check
+
+{ml_section(s, ml)}
+
 ## Scoring workings
 
 {md_table(workings)}
 """
     (DOCS / "results.md").write_text(text, encoding="utf-8")
+
+
+def ml_section(s, ml) -> str:
+    """Markdown for the logistic-regression and random-forest check."""
+    rates = ", ".join(f"{s.label(k)} {fmt.pct(v)}" for k, v in ml.win_rates.items())
+    head = (
+        f"{len(ml.sample):,} scenarios with every input drawn within "
+        f"+/-{fmt.pct(s.ml.input_range)} of its base value (seed {s.ml.seed}). "
+        f"Share of scenarios each route wins: {rates}."
+    )
+    if not ml.trained:
+        return (
+            head
+            + " One route wins (almost) every draw, so there is too little variety to classify."
+        )
+    models = model_table(s, ml).round(3).fillna("")
+    cols = [
+        "label",
+        "Logistic regression importance",
+        "Random forest importance",
+        "Logistic regression direction",
+    ]
+    top = ml.importance[cols].head(s.ml.top_features).round(3)
+    return f"""{head}
+
+Accuracy on the {fmt.pct(s.ml.test_share)} of draws held out, and each model's
+probability for the base case:
+
+{md_table(models)}
+
+Permutation importance (drop in test accuracy when the input is shuffled). The
+direction is the logistic regression's standardised coefficient for the base-case
+winner: positive means a higher value makes it more likely to stay on top.
+
+{md_table(top)}"""
 
 
 def _wrap(text: str, width: int) -> str:
@@ -216,8 +263,9 @@ def main() -> None:
     result = score_routes(s, fin)
     rec = build_recommendation(s)
     table = tornado(s)
-    save_figures(s, fin, result, weight_sweep(s, result), table, weight_map(s, result))
-    write_results(s, result, rec, table, weight_flips(s, result), downside_table(s))
+    ml = run_ml_check(s, result.winner)
+    save_figures(s, fin, result, weight_sweep(s, result), table, weight_map(s, result), ml)
+    write_results(s, result, rec, table, weight_flips(s, result), downside_table(s), ml)
     one_page_pdf(s, fin, result, rec)
     print(f"Wrote figures, results.md and one_page_summary.pdf to {DOCS}")
 

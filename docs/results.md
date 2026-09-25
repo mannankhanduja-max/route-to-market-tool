@@ -83,6 +83,36 @@ Breakeven months above 36 are projected past the horizon.
 | Strategic partner | €10.1m | €5.2m | 0.51 | 26.0 | 56.22 | €888k | €1.2m | 2 | 3 |
 | Direct sales | €11.6m | €8.1m | 0.7 | 78.91 | 122.33 | €13.1m | €11.6m | 3 | 2 |
 
+## Machine-learning check
+
+2,000 scenarios with every input drawn within +/-25% of its base value (seed 42). Share of scenarios each route wins: Direct sales 11%, Reseller network 69%, Strategic partner 20%.
+
+Accuracy on the 25% of draws held out, and each model's
+probability for the base case:
+
+| model | test accuracy | P(Direct sales) | P(Reseller network) | P(Strategic partner) |
+|---|---|---|---|---|
+| Benchmark: always pick the most common winner | 0.686 |  |  |  |
+| Logistic regression | 0.906 | 0.001 | 0.996 | 0.003 |
+| Random forest | 0.78 | 0.012 | 0.977 | 0.011 |
+
+Permutation importance (drop in test accuracy when the input is shuffled). The
+direction is the logistic regression's standardised coefficient for the base-case
+winner: positive means a higher value makes it more likely to stay on top.
+
+| label | Logistic regression importance | Random forest importance | Logistic regression direction |
+|---|---|---|---|
+| Strategic partner: channel take | 0.126 | 0.05 | 1.457 |
+| Reseller network: channel take | 0.112 | 0.034 | -2.053 |
+| Reseller network: reach | 0.082 | 0.015 | 1.77 |
+| Gross margin | 0.077 | 0.013 | 1.796 |
+| Reseller network: monthly fixed cost | 0.058 | 0.001 | -1.638 |
+| Reseller network: time to first revenue | 0.035 | 0.01 | -1.275 |
+| Strategic partner: reach | 0.029 | 0.015 | -0.571 |
+| Strategic partner: monthly fixed cost | 0.029 | 0.01 | 0.489 |
+| Strategic partner: time to first revenue | 0.017 | 0.008 | 0.451 |
+| Reseller network: CAC | 0.002 | 0.006 | -0.759 |
+
 ## Scoring workings
 
 | route | dimension | metric | value | worst | best | score | metric_weight | contribution |
