@@ -6,7 +6,7 @@
 
 **How sure:** It ranks first in 54% of all possible weightings and still ranks first in the downside case. The answer changes if resellers demand a margin above ~38% (30% assumed).
 
-**Try it in the browser:** [Route-to-Market Scorer](https://mannankhanduja-max.github.io/route-to-market-tool/). Enter your own market, routes and weights and get the VMR scores, cash curves, sensitivity and recommendation live. It runs the same model as the Python code; a test checks the two agree.
+**Try it in the browser:** [Route-to-Market Scorer](https://mannankhanduja-max.github.io/route-to-market-tool/). Enter your own market, routes and weights and get the VMR scores, cash curves, sensitivity, recommendation and the machine-learning check live. It runs the same model as the Python code; a test checks the two agree.
 
 ![VMR scores and cumulative cash by route](docs/figures/key_chart.png)
 
@@ -59,6 +59,8 @@ The tornado moves one input at a time. To see what happens when all 38 inputs ar
 - **The same assumptions matter when everything moves.** Shuffling either channel take costs both models the most accuracy, followed by reseller reach and gross margin. This matches the tornado, so the one-at-a-time view was not hiding a joint effect.
 
 The models learn this tool's own logic from synthetic scenarios, not real market outcomes. They are a stress test of the recommendation, not a prediction about the market.
+
+The [browser version](https://mannankhanduja-max.github.io/route-to-market-tool/) trains both models on your own inputs, in your browser, in about five seconds.
 
 ## Method
 

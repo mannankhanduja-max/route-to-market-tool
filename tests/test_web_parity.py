@@ -6,10 +6,12 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from rtm.finance import run_financials
+from rtm.ml import sample_scenarios
 from rtm.scoring import score_routes
 from rtm.sensitivity import flip_thresholds, tornado, weight_flips, weight_space_share
 
@@ -18,22 +20,31 @@ PAGE = Path(__file__).resolve().parents[1] / "docs" / "index.html"
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 
 
+def _page_script(*ids: str) -> str:
+    """The page's scripts with these ids, followed by its built-in example scenario."""
+    html = PAGE.read_text(encoding="utf-8")
+    code = "".join(re.search(rf'<script id="{i}">(.*?)</script>', html, re.S).group(1) for i in ids)
+    example = re.search(r"const EXAMPLE = (\{.*?\n\});", html, re.S).group(1)
+    return code + f"\nconst EXAMPLE = {example};\n"
+
+
+def _node(script: str) -> dict:
+    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
+    return json.loads(out.stdout)
+
+
 def _run_page_model() -> dict:
     """Run the page's model script on its built-in example scenario."""
-    html = PAGE.read_text(encoding="utf-8")
-    model = re.search(r'<script id="model">(.*?)</script>', html, re.S).group(1)
-    example = re.search(r"const EXAMPLE = (\{.*?\n\});", html, re.S).group(1)
     script = (
-        model
-        + f"\nconst EXAMPLE = {example};\nconst a = analyse(EXAMPLE);\n"
+        _page_script("model")
+        + "const a = analyse(EXAMPLE);\n"
         + "console.log(JSON.stringify({totals: a.res.totals, stressed: a.stressed.ranking,"
         + " flips: a.flips.map(f => [f.dim, f.dir, f.w, f.win]), share: a.share,"
         + " torn: a.torn.slice(0, 5).map(t => [t.path.join('.'), t.leadLow, t.leadHigh]),"
         + " thr: a.thresholds.map(t => [t.down && t.down.change, t.up && t.up.change]),"
         + " breakeven: a.fin.base.map(f => f.projected)}));"
     )
-    out = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=True)
-    return json.loads(out.stdout)
+    return _node(script)
 
 
 def _js_path(scenario, path: str) -> str:
@@ -75,3 +86,31 @@ def test_page_example_matches_scenario_yaml(scenario):
                 assert js_change is None
             else:
                 assert js_change == pytest.approx(py_change)
+
+
+def test_page_machine_learning_agrees_with_python(scenario):
+    """The page trains its own models (different random numbers), so compare conclusions."""
+    js = _node(
+        _page_script("model", "ml")
+        + "const r = runMlCheck(EXAMPLE);\n"
+        + "console.log(JSON.stringify({win: r.winRates, bench: r.benchmark, trained: r.trained,"
+        + " base: r.baseWinner, paths: r.paths.map(p => p.join('.')), models: r.models}));"
+    )
+    keys = scenario.route_keys
+    python_rates = sample_scenarios(scenario).winner.value_counts(normalize=True)
+    for i, key in enumerate(keys):  # same sampling scheme, different random draws
+        assert js["win"][i] == pytest.approx(python_rates.get(key, 0.0), abs=0.03)
+
+    assert js["trained"]
+    winner = keys.index(score_routes(scenario).winner)
+    assert js["base"] == winner
+    importance = np.zeros(len(js["paths"]))
+    for model in js["models"].values():
+        assert model["accuracy"] > js["bench"]
+        assert int(np.argmax(model["baseProba"])) == winner
+        importance += np.array(model["importance"])
+    top = {js["paths"][j] for j in np.argsort(-importance)[:4]}
+    assert {
+        _js_path(scenario, "routes.reseller.channel_take"),
+        _js_path(scenario, "routes.partner.channel_take"),
+    } <= top

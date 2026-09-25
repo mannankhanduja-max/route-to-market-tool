@@ -157,6 +157,26 @@ which the one-at-a-time tornado cannot.
   how markets behave. High accuracy means the decision rule is simple to learn
   from the inputs; it says nothing about whether the inputs are right.
 
+### The browser version
+
+`docs/index.html` trains the same two models in JavaScript, in a background
+worker, on whatever inputs the viewer enters. It follows the steps above with
+three differences, made so it finishes in about five seconds in a browser:
+
+- its own seeded random numbers (mulberry32, seed 42), so individual draws
+  differ from Python's;
+- the logistic regression is fitted by gradient descent with momentum (400
+  steps) on the same objective, cross-entropy plus an L2 penalty with C = 1;
+- the random forest searches splits over 64 quantile bins per input rather
+  than every distinct value, as histogram-based forests such as LightGBM do.
+
+`tests/test_web_parity.py` runs the page's code under node and checks that it
+reaches the same conclusions as Python on the example:
+- win rates within 3 points;
+- both models beat the benchmark;
+- both favour the same base-case winner;
+- both channel takes are among the four most important inputs.
+
 ## 6. Limitations
 
 - All inputs are synthetic. The tool shows the reasoning; the numbers need to be
