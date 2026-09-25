@@ -17,7 +17,7 @@
   --good:#1a7f4b; --warn:#a15c00; --bad:#b3261e; --warn-soft:#fbefdc; --bad-soft:#fbe7e5;
   --r1:#2a78d6; --r2:#eb6834; --r3:#1baf7a; --r4:#eda100; --r5:#e87ba4;
   --dv:#1c5cab; --dm:#3987e5; --dr:#9ec5f4; --dv-t:#ffffff; --dm-t:#ffffff; --dr-t:#0b0b0b;
-  --low:#86b6ef; --high:#1c5cab;
+  --low:#86b6ef; --high:#1c5cab; --m1:#4a3aa7; --m2:#eda100;
   --grid:#e4e6e0;
   --display:"Archivo","Helvetica Neue",Arial,sans-serif;
   --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -32,7 +32,7 @@
     --good:#4cc38a; --warn:#e3a33c; --bad:#f07a70; --warn-soft:#3a2c14; --bad-soft:#3d1f1c;
     --r1:#3987e5; --r2:#d95926; --r3:#199e70; --r4:#c98500; --r5:#d55181;
     --dv:#9ec5f4; --dm:#3987e5; --dr:#1c5cab; --dv-t:#0b0b0b; --dm-t:#ffffff; --dr-t:#ffffff;
-    --low:#6da7ec; --high:#184f95; --grid:#2a3038;
+    --low:#6da7ec; --high:#184f95; --grid:#2a3038; --m1:#9085e9; --m2:#c98500;
   }
 }
 :root[data-theme="dark"]{
@@ -43,7 +43,7 @@
   --good:#4cc38a; --warn:#e3a33c; --bad:#f07a70; --warn-soft:#3a2c14; --bad-soft:#3d1f1c;
   --r1:#3987e5; --r2:#d95926; --r3:#199e70; --r4:#c98500; --r5:#d55181;
   --dv:#9ec5f4; --dm:#3987e5; --dr:#1c5cab; --dv-t:#0b0b0b; --dm-t:#ffffff; --dr-t:#ffffff;
-  --low:#6da7ec; --high:#184f95; --grid:#2a3038;
+  --low:#6da7ec; --high:#184f95; --grid:#2a3038; --m1:#9085e9; --m2:#c98500;
 }
 *{box-sizing:border-box}
 body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:0 48px}
@@ -177,6 +177,10 @@ ul.cond,ol.cond{margin:0;padding-left:20px;display:grid;gap:6px;max-width:75ch}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:6px;font-size:13px}
 textarea.json{width:100%;min-height:140px;font-family:var(--mono);font-size:12px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);padding:8px}
 @media (prefers-reduced-motion:no-preference){.bar-anim{transition:width .25s ease}}
+.ml-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-block:4px 12px}
+.ml-note{color:var(--ink-2);max-width:78ch;margin:0}
+.stale{color:var(--warn);font-weight:600}
+.dir-up{color:var(--good)} .dir-down{color:var(--bad)}
 </style>
 </head>
 <body>
@@ -266,6 +270,13 @@ textarea.json{width:100%;min-height:140px;font-family:var(--mono);font-size:12px
         <div class="legend" id="tornado-legend"></div>
       </section>
 
+      <section class="block" id="ml-block">
+        <header><h2>Machine-learning check</h2><span class="eyebrow">Logistic regression · Random forest</span></header>
+        <p class="ml-note">The tornado moves one input at a time. This check draws 2,000 scenarios with every input moved at once (±25%), labels each with the route the VMR model picks, and trains a logistic regression and a random forest to predict it. The models learn this tool's logic, not real market data: they show how robust the recommendation is and which assumptions decide it.</p>
+        <div class="ml-bar"><button class="btn primary" id="btn-ml" type="button">Run the check</button><span class="hint" id="ml-status" role="status"></span></div>
+        <div id="ml-out"></div>
+      </section>
+
       <section class="block">
         <header><h2>Financials and downside</h2></header>
         <div class="tbl-wrap"><table class="data" id="fin-table"></table></div>
@@ -278,7 +289,7 @@ textarea.json{width:100%;min-height:140px;font-family:var(--mono);font-size:12px
     </div>
   </div>
 
-  <p class="foot">Method: revenue ramps on an S-curve from each route's first-revenue month to steady state (market size × target share × reach). Contribution is revenue × (gross margin − channel take); cash flow subtracts CAC on new and replacement customers, fixed costs and set-up. Breakeven past the horizon is projected at the final month's cash flow. Scores use fixed anchors, so one route's score never moves because another route changed. Same model as the open-source Python tool; the example figures are synthetic.</p>
+  <p class="foot">The machine-learning check trains in your browser: a softmax logistic regression on standardised inputs (L2, C = 1) and a 200-tree random forest (Gini splits over 64 quantile bins, √d inputs per split, at least 5 scenarios per leaf), with permutation importance on held-out scenarios. Method: revenue ramps on an S-curve from each route's first-revenue month to steady state (market size × target share × reach). Contribution is revenue × (gross margin − channel take); cash flow subtracts CAC on new and replacement customers, fixed costs and set-up. Breakeven past the horizon is projected at the final month's cash flow. Scores use fixed anchors, so one route's score never moves because another route changed. Same model as the open-source Python tool; the example figures are synthetic.</p>
 </div>
 <div class="toast" id="toast" hidden></div>
 
@@ -448,6 +459,179 @@ function analyse(s){
 }
 </script>
 
+<script id="ml">
+/* ---------- Machine-learning check: a port of src/rtm/ml.py ----------
+   There is no historical market-entry data, so both models learn the VMR model:
+   draw scenarios with every input moved at once, label each with the winning
+   route, train a logistic regression and a random forest to predict it. */
+const ML = {input_range:0.25, n_samples:2000, seed:42, test_share:0.25, lr_regularisation:1.0,
+  rf_trees:200, rf_min_leaf:5, rf_bins:64, importance_repeats:5, top_features:10, lr_iterations:400, lr_step:1.0};
+
+function rng(seed){ // mulberry32: small, fast, reproducible
+  let a=seed>>>0;
+  return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+}
+function shuffleInPlace(arr,rand){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+function setP(s,p,v){ const f=p[p.length-1]; if(FRACTIONS.has(f)) v=clip(v,0,1); if(p[0]==="routes") s.routes[p[1]][f]=v; else s[p[0]][f]=v; return v; }
+
+function sampleScenarios(s, cfg, progress){
+  const paths=inputPaths(s).filter(p=>getP(s,p)!==0), d=paths.length, n=cfg.n_samples;
+  const base=paths.map(p=>getP(s,p)), rand=rng(cfg.seed);
+  const X=new Float64Array(n*d), y=new Int32Array(n);
+  for(let i=0;i<n;i++){
+    const c=structuredClone(s);
+    for(let j=0;j<d;j++) X[i*d+j]=setP(c,paths[j],base[j]*(1-cfg.input_range+2*cfg.input_range*rand()));
+    y[i]=score(c).winner;
+    if(progress && i%200===0) progress(`Sampling scenarios… ${i}/${n}`);
+  }
+  return {paths,X,y,n,d};
+}
+
+function stratifiedSplit(y,n,share,rand){
+  const byClass=new Map();
+  for(let i=0;i<n;i++){ if(!byClass.has(y[i])) byClass.set(y[i],[]); byClass.get(y[i]).push(i); }
+  const train=[], test=[];
+  for(const idx of byClass.values()){ shuffleInPlace(idx,rand); const k=idx.length>=2?Math.max(1,Math.round(idx.length*share)):0; test.push(...idx.slice(0,k)); train.push(...idx.slice(k)); }
+  return {train,test};
+}
+const rows=(X,d,idx)=>{ const out=new Float64Array(idx.length*d); idx.forEach((r,i)=>out.set(X.subarray(r*d,r*d+d),i*d)); return out; };
+
+/* Logistic regression: softmax on standardised inputs, minimising
+   mean cross-entropy + ||W||^2 / (2 C n) (the same objective as scikit-learn's C). */
+function fitLogistic(X,y,n,d,classes,cfg){
+  const mean=new Float64Array(d), sd=new Float64Array(d);
+  for(let j=0;j<d;j++){ let m=0; for(let i=0;i<n;i++) m+=X[i*d+j]; m/=n; let v=0; for(let i=0;i<n;i++) v+=(X[i*d+j]-m)**2; mean[j]=m; sd[j]=Math.sqrt(v/n)||1; }
+  const Z=new Float64Array(n*d); for(let i=0;i<n;i++) for(let j=0;j<d;j++) Z[i*d+j]=(X[i*d+j]-mean[j])/sd[j];
+  const K=classes.length, W=new Float64Array(K*d), b=new Float64Array(K), cls=new Int32Array(n);
+  for(let i=0;i<n;i++) cls[i]=classes.indexOf(y[i]);
+  const lam=1/(cfg.lr_regularisation*n), gW=new Float64Array(K*d), gb=new Float64Array(K), p=new Float64Array(K);
+  const vW=new Float64Array(K*d), vb=new Float64Array(K);
+  for(let it=0;it<cfg.lr_iterations;it++){
+    gW.fill(0); gb.fill(0);
+    for(let i=0;i<n;i++){
+      let mx=-Infinity;
+      for(let k=0;k<K;k++){ let z=b[k]; for(let j=0;j<d;j++) z+=W[k*d+j]*Z[i*d+j]; p[k]=z; if(z>mx) mx=z; }
+      let s=0; for(let k=0;k<K;k++){ p[k]=Math.exp(p[k]-mx); s+=p[k]; }
+      for(let k=0;k<K;k++){ const e=p[k]/s-(k===cls[i]?1:0); gb[k]+=e; for(let j=0;j<d;j++) gW[k*d+j]+=e*Z[i*d+j]; }
+    }
+    for(let q=0;q<K*d;q++){ const g=gW[q]/n+lam*W[q]; vW[q]=0.9*vW[q]+g; W[q]-=cfg.lr_step*vW[q]; }
+    for(let k=0;k<K;k++){ vb[k]=0.9*vb[k]+gb[k]/n; b[k]-=cfg.lr_step*vb[k]; }
+  }
+  const proba=(x)=>{ const out=new Float64Array(K); let mx=-Infinity;
+    for(let k=0;k<K;k++){ let z=b[k]; for(let j=0;j<d;j++) z+=W[k*d+j]*(x[j]-mean[j])/sd[j]; out[k]=z; if(z>mx) mx=z; }
+    let s=0; for(let k=0;k<K;k++){ out[k]=Math.exp(out[k]-mx); s+=out[k]; } for(let k=0;k<K;k++) out[k]/=s; return out; };
+  // Direction for a class: its coefficients relative to the average class (standardised units).
+  const direction=(c)=>{ const k=classes.indexOf(c), out=new Float64Array(d); if(k<0) return out;
+    for(let j=0;j<d;j++){ let m=0; for(let q=0;q<K;q++) m+=W[q*d+j]; out[j]=W[k*d+j]-m/K; } return out; };
+  return {proba,direction};
+}
+
+/* Random forest: CART trees on Gini impurity, bootstrap samples, sqrt(d)
+   candidate features per split, a minimum leaf size, no depth limit.
+   Split points are searched over 64 quantile bins per input (as LightGBM does)
+   instead of every distinct value, which keeps training fast in a browser. */
+function fitForest(X,y,n,d,classes,cfg,rand,progress){
+  const K=classes.length, B=cfg.rf_bins, cls=new Int32Array(n); for(let i=0;i<n;i++) cls[i]=classes.indexOf(y[i]);
+  // Bin edges from training quantiles; bin[i*d+j] is the bin of row i, input j.
+  const edges=[], bin=new Uint8Array(n*d), col=new Float64Array(n);
+  for(let j=0;j<d;j++){
+    for(let i=0;i<n;i++) col[i]=X[i*d+j];
+    const sorted=col.slice().sort(), e=[];
+    for(let q=1;q<B;q++){ const v=sorted[Math.floor(q*n/B)]; if(!e.length||v>e[e.length-1]) e.push(v); }
+    edges.push(e);
+    for(let i=0;i<n;i++){ let lo=0, hi=e.length; const v=col[i]; while(lo<hi){ const m=(lo+hi)>>1; if(v<e[m]) hi=m; else lo=m+1; } bin[i*d+j]=lo; }
+  }
+  const mtry=Math.max(1,Math.floor(Math.sqrt(d))), minLeaf=cfg.rf_min_leaf, trees=[];
+  const gini=(c,o,t)=>{ if(t===0) return 0; let s=0; for(let k=0;k<K;k++){ const q=c[o+k]/t; s+=q*q; } return 1-s; };
+  const hist=new Float64Array(B*K), lc=new Float64Array(K), rc=new Float64Array(K);
+  for(let tIdx=0;tIdx<cfg.rf_trees;tIdx++){
+    const feat=[], thr=[], left=[], right=[], leafAt=[], leafP=[];
+    const build=(idx)=>{
+      const node=feat.length; feat.push(-1); thr.push(0); left.push(-1); right.push(-1); leafAt.push(-1);
+      const m=idx.length, counts=new Float64Array(K); for(let q=0;q<m;q++) counts[cls[idx[q]]]++;
+      const makeLeaf=()=>{ leafAt[node]=leafP.length; for(let k=0;k<K;k++) leafP.push(counts[k]/m); return node; };
+      if(m<2*minLeaf || counts.some(c=>c===m)) return makeLeaf();
+      const parent=gini(counts,0,m); let bestGain=1e-12, bestF=-1, bestB=-1;
+      const feats=shuffleInPlace(Array.from({length:d},(_,j)=>j),rand).slice(0,mtry);
+      for(const f of feats){
+        hist.fill(0); for(let q=0;q<m;q++){ const i=idx[q]; hist[bin[i*d+f]*K+cls[i]]++; }
+        lc.fill(0); rc.set(counts); let nl=0;
+        for(let bb=0;bb<B-1;bb++){
+          let moved=0; for(let k=0;k<K;k++){ const h=hist[bb*K+k]; lc[k]+=h; rc[k]-=h; moved+=h; }
+          if(!moved) continue; nl+=moved; const nr=m-nl;
+          if(nl<minLeaf) continue; if(nr<minLeaf) break;
+          const gain=parent-(nl*gini(lc,0,nl)+nr*gini(rc,0,nr))/m;
+          if(gain>bestGain){ bestGain=gain; bestF=f; bestB=bb; }
+        }
+      }
+      if(bestF<0) return makeLeaf();
+      const L=[], R=[]; for(let q=0;q<m;q++){ const i=idx[q]; (bin[i*d+bestF]<=bestB?L:R).push(i); }
+      feat[node]=bestF; thr[node]=edges[bestF][bestB]; // row goes left when value < edge
+      left[node]=build(L); right[node]=build(R);
+      return node;
+    };
+    const boot=new Array(n); for(let i=0;i<n;i++) boot[i]=Math.floor(rand()*n);
+    build(boot);
+    trees.push({feat:Int32Array.from(feat),thr:Float64Array.from(thr),left:Int32Array.from(left),right:Int32Array.from(right),leafAt:Int32Array.from(leafAt),leafP:Float64Array.from(leafP)});
+    if(progress && tIdx%25===0) progress(`Growing the random forest… ${tIdx}/${cfg.rf_trees} trees`);
+  }
+  const out=new Float64Array(K);
+  const probaRow=(X,i,dd)=>{ out.fill(0);
+    for(const t of trees){ let nd=0; while(t.feat[nd]>=0) nd = X[i*dd+t.feat[nd]]<t.thr[nd] ? t.left[nd] : t.right[nd]; const o=t.leafAt[nd]; for(let k=0;k<K;k++) out[k]+=t.leafP[o+k]; }
+    for(let k=0;k<K;k++) out[k]/=trees.length; return out; };
+  return {probaRow, proba:(x)=>Float64Array.from(probaRow(x,0,x.length))};
+}
+
+function accuracyOf(model,X,y,n,d,classes){
+  let hit=0;
+  for(let i=0;i<n;i++){ const p=model.probaRow?model.probaRow(X,i,d):model.proba(X.subarray(i*d,i*d+d)); if(classes[argmax(p)]===y[i]) hit++; }
+  return hit/n;
+}
+function permutationImportance(model,X,y,n,d,classes,cfg,rand){
+  const base=accuracyOf(model,X,y,n,d,classes), imp=new Float64Array(d), Xp=X.slice(), col=new Float64Array(n);
+  for(let j=0;j<d;j++){
+    let drop=0;
+    for(let r=0;r<cfg.importance_repeats;r++){
+      for(let i=0;i<n;i++) col[i]=X[i*d+j];
+      shuffleInPlace(col,rand);
+      for(let i=0;i<n;i++) Xp[i*d+j]=col[i];
+      drop+=base-accuracyOf(model,Xp,y,n,d,classes);
+    }
+    for(let i=0;i<n;i++) Xp[i*d+j]=X[i*d+j];
+    imp[j]=drop/cfg.importance_repeats;
+  }
+  return imp;
+}
+
+function runMlCheck(s, cfg=ML, progress=null){
+  const t0=Date.now(), baseWinner=score(s).winner, nRoutes=s.routes.length;
+  const {paths,X,y,n,d}=sampleScenarios(s,cfg,progress);
+  const winRates=new Array(nRoutes).fill(0); for(let i=0;i<n;i++) winRates[y[i]]+=1/n;
+  const rand=rng(cfg.seed+1), {train,test}=stratifiedSplit(y,n,cfg.test_share,rand);
+  const yTr=Int32Array.from(train,i=>y[i]), yTe=Int32Array.from(test,i=>y[i]);
+  const classes=[...new Set(yTr)].sort((a,b)=>a-b);
+  const out={paths,n,winRates,baseWinner,trained:false};
+  if(classes.length<2 || !test.length) return out;
+  const Xtr=rows(X,d,train), Xte=rows(X,d,test), baseX=Float64Array.from(paths,p=>getP(s,p));
+  const counts=new Map(); for(const c of yTr) counts.set(c,(counts.get(c)||0)+1);
+  const mode=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0]-b[0])[0][0];
+  out.benchmark=yTe.reduce((a,c)=>a+(c===mode?1:0),0)/yTe.length;
+  if(progress) progress("Training the logistic regression…");
+  const lr=fitLogistic(Xtr,yTr,train.length,d,classes,cfg);
+  const rf=fitForest(Xtr,yTr,train.length,d,classes,cfg,rand,progress);
+  const toRoutes=(p)=>{ const o=new Array(nRoutes).fill(0); classes.forEach((c,k)=>o[c]=p[k]); return o; };
+  out.models={};
+  for(const [name,model] of [["Logistic regression",lr],["Random forest",rf]]){
+    if(progress) progress(`Measuring importance for the ${name.toLowerCase()}…`);
+    out.models[name]={accuracy:accuracyOf(model,Xte,yTe,test.length,d,classes), baseProba:toRoutes(model.proba(baseX)),
+      importance:Array.from(permutationImportance(model,Xte,yTe,test.length,d,classes,cfg,rand))};
+  }
+  out.direction=Array.from(lr.direction(baseWinner));
+  out.trained=true; out.seconds=(Date.now()-t0)/1000;
+  return out;
+}
+</script>
+
 <script>
 /* ---------- Example scenario (same as data/scenario.yaml) ---------- */
 const EXAMPLE = {
@@ -525,9 +709,10 @@ function fmtInput(f,v){ const k=META[f]?.kind; if(k==="pct"||k==="rating") retur
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const L=i=>esc(S.routes[i].label||`Route ${i+1}`);
 const color=i=>`var(--r${i+1})`;
-function pathLabel(p){ const f=p[p.length-1], name=(META[f]?.label||f).toLowerCase();
+const lower=t=>/^[A-Z]{2,}\b/.test(t)?t:t.toLowerCase();
+function pathLabel(p){ const f=p[p.length-1], name=lower(META[f]?.label||f);
   return p[0]==="routes" ? `${S.routes[p[1]].label||"Route "+(p[1]+1)}: ${name}` : name[0].toUpperCase()+name.slice(1); }
-function phrase(p){ const f=p[p.length-1], name=(META[f]?.label||f).toLowerCase();
+function phrase(p){ const f=p[p.length-1], name=lower(META[f]?.label||f);
   return p[0]==="routes" ? `the ${esc((S.routes[p[1]].label||"route").toLowerCase())}'s ${name}` : name; }
 
 /* ---------- Inputs: display <-> model units ---------- */
@@ -642,9 +827,10 @@ function schedule(){ cancelAnimationFrame(pending); pending=requestAnimationFram
 function recompute(){
   const {errs,warns}=problems();
   document.getElementById("issues").innerHTML = errs.map(e=>`<div class="issue"><span>${e}</span></div>`).join("")+warns.map(e=>`<div class="issue warn"><span>${e}</span></div>`).join("");
-  if(errs.length){ document.getElementById("verdict").innerHTML=`<div class="kicker"><span class="pill bad">Fix the inputs above</span></div><h2>Scores will update once the inputs are valid.</h2>`; return; }
+  if(errs.length){ document.getElementById("verdict").innerHTML=`<div class="kicker"><span class="pill bad">Fix the inputs above</span></div><h2>Scores will update once the inputs are valid.</h2>`; updateMlState(true); return; }
   A=analyse(S);
   renderVerdict(); renderScores(); renderCash(); renderRec(); renderTornado(); renderFin(); renderWorkings();
+  updateMlState(false);
 }
 
 function renderVerdict(){
@@ -821,8 +1007,90 @@ function renderWorkings(){
   document.getElementById("workings").innerHTML=t+`</tbody>`;
 }
 
+
+/* ---------- Machine-learning check: run in a background worker ---------- */
+let mlRun=null, mlResult=null, mlWorker=null, mlInvalid=false;
+const MODEL_NAMES=["Logistic regression","Random forest"];
+function mlStatus(t){ document.getElementById("ml-status").textContent=t; }
+function updateMlState(invalid){
+  mlInvalid=invalid;
+  const btn=document.getElementById("btn-ml");
+  btn.disabled = invalid || !!mlWorker;
+  if(invalid){ mlStatus("Fix the inputs above to run the check."); return; }
+  if(mlWorker) return;
+  if(mlRun && mlRun.key!==JSON.stringify(S)){ btn.textContent="Re-run the check"; mlStatus(""); document.getElementById("ml-status").innerHTML=`<span class="stale">Inputs changed since this run.</span> Re-run to update.`; }
+  else if(mlResult){ btn.textContent="Re-run the check"; mlStatus(`Ran in ${mlResult.seconds.toFixed(1)} s on your current inputs (seed ${ML.seed}).`); }
+}
+function startMl(){
+  if(mlWorker||mlInvalid) return;
+  const snapshot=structuredClone(S), key=JSON.stringify(S);
+  const btn=document.getElementById("btn-ml"); btn.disabled=true;
+  mlStatus("Starting…");
+  const finish=(r)=>{ mlWorker=null; mlRun={key,snapshot}; mlResult=r; renderMl(); updateMlState(mlInvalid); };
+  try{
+    const src=document.getElementById("model").textContent+document.getElementById("ml").textContent+
+      "\nonmessage=e=>{const r=runMlCheck(e.data,ML,m=>postMessage({progress:m}));postMessage({result:r});};";
+    const url=URL.createObjectURL(new Blob([src],{type:"text/javascript"}));
+    mlWorker=new Worker(url);
+    mlWorker.onmessage=e=>{ if(e.data.progress) mlStatus(e.data.progress); if(e.data.result){ mlWorker.terminate(); URL.revokeObjectURL(url); finish(e.data.result); } };
+    mlWorker.onerror=err=>{ mlWorker.terminate(); mlWorker=null; mlStatus(`The check failed: ${err.message}`); updateMlState(mlInvalid); };
+    mlWorker.postMessage(snapshot);
+  }catch(err){
+    // No worker available: run on the page itself (it will pause for a few seconds).
+    mlWorker={terminate(){}}; mlStatus("Running…");
+    setTimeout(()=>finish(runMlCheck(snapshot,ML,null)),30);
+  }
+}
+document.getElementById("btn-ml").addEventListener("click",startMl);
+
+function renderMl(){
+  const out=document.getElementById("ml-out"), r=mlResult, snap=mlRun.snapshot;
+  const name=i=>esc(snap.routes[i].label||`Route ${i+1}`);
+  const label=p=>{ const f=p[p.length-1], n=lower(META[f]?.label||f); return p[0]==="routes"?`${name(p[1])}: ${n}`:cap(n); };
+  const inSentence=p=>{ const f=p[p.length-1], n=lower(META[f]?.label||f); return p[0]==="routes"?`the ${name(p[1]).toLowerCase()}'s ${n}`:lower(n); };
+  const winner=r.baseWinner;
+  // Win-rate bars
+  const order=r.winRates.map((v,i)=>i).sort((a,b)=>r.winRates[b]-r.winRates[a]);
+  const W=640, rowH=30, l=150, rr=60, H=order.length*rowH+24, X=v=>l+(W-l-rr)*v;
+  let bars=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of sampled scenarios each route wins">`;
+  for(const t of [0,.25,.5,.75,1]) bars+=`<line x1="${X(t)}" x2="${X(t)}" y1="0" y2="${H-20}" style="stroke:var(--grid)"/><text x="${X(t)}" y="${H-4}" text-anchor="middle">${pct(t)}</text>`;
+  order.forEach((i,k)=>{ const y=k*rowH+5, bh=rowH-12;
+    bars+=`<text x="${l-10}" y="${y+bh/2+4}" text-anchor="end" style="fill:var(--ink)">${name(i)}</text><rect x="${l}" y="${y}" width="${Math.max(0,X(r.winRates[i])-l)}" height="${bh}" rx="3" style="fill:${color(i)}"/><text class="lbl-strong" x="${X(r.winRates[i])+6}" y="${y+bh/2+4}">${pct(r.winRates[i])}</text>`; });
+  bars+=`</svg>`;
+  let html=`<h3 class="eyebrow" style="margin:6px 0">Who wins across ${r.n.toLocaleString()} scenarios</h3><div class="chart">${bars}</div>`;
+  if(!r.trained){
+    out.innerHTML=html+`<p class="ml-note" style="margin-top:10px">One route wins (almost) every scenario, so there is too little variety for the models to learn from.</p>`; return;
+  }
+  // Model table
+  html+=`<div class="tbl-wrap" style="margin-top:14px"><table class="data"><thead><tr><th>Model</th><th>Accuracy</th>${snap.routes.map((_,i)=>`<th style="white-space:normal">${name(i)}</th>`).join("")}</tr></thead><tbody>`;
+  html+=`<tr><td style="white-space:normal">Benchmark: always pick the most common winner</td><td>${pct(r.benchmark)}</td>${snap.routes.map(()=>"<td>—</td>").join("")}</tr>`;
+  for(const m of MODEL_NAMES){ const x=r.models[m]; html+=`<tr><td><span class="swatch" style="display:inline-block;margin-right:6px;background:var(--${m===MODEL_NAMES[0]?"m1":"m2"})"></span>${m}</td><td>${pct(x.accuracy)}</td>${x.baseProba.map((p,i)=>`<td${i===winner?' style="font-weight:600"':""}>${(p*100).toFixed(1)}%</td>`).join("")}</tr>`; }
+  html+=`</tbody></table></div><p class="hint" style="margin:6px 0 0">Accuracy is measured on the 25% of scenarios held back from training. The route columns are each model's probability that the route wins your base case.</p>`;
+  // Importance chart
+  const lrI=r.models[MODEL_NAMES[0]].importance, rfI=r.models[MODEL_NAMES[1]].importance;
+  const idx=r.paths.map((_,j)=>j).sort((a,b)=>(lrI[b]+rfI[b])-(lrI[a]+rfI[a])).slice(0,ML.top_features);
+  const mx=Math.max(0.01,...idx.map(j=>Math.max(lrI[j],rfI[j]))), IW=640, il=230, ir=20, rH=30, IH=idx.length*rH+26, IX=v=>il+(IW-il-ir)*Math.max(0,v)/mx;
+  let imp=`<svg viewBox="0 0 ${IW} ${IH}" role="img" aria-label="Permutation importance of the top inputs for both models">`;
+  for(const t of niceTicks(0,mx,4)) imp+=`<line x1="${IX(t)}" x2="${IX(t)}" y1="0" y2="${IH-22}" style="stroke:var(--grid)"/><text x="${IX(t)}" y="${IH-6}" text-anchor="middle">${(t*100).toFixed(0)} pts</text>`;
+  idx.forEach((j,k)=>{ const y=k*rH+3;
+    imp+=`<text x="${il-10}" y="${y+rH/2+2}" text-anchor="end" style="fill:var(--ink)">${label(r.paths[j])}</text>`;
+    imp+=`<rect x="${il}" y="${y+2}" width="${IX(lrI[j])-il}" height="10" rx="2" style="fill:var(--m1)"><title>Logistic regression: accuracy drops ${(lrI[j]*100).toFixed(1)} points when shuffled</title></rect>`;
+    imp+=`<rect x="${il}" y="${y+13}" width="${IX(rfI[j])-il}" height="10" rx="2" style="fill:var(--m2)"><title>Random forest: accuracy drops ${(rfI[j]*100).toFixed(1)} points when shuffled</title></rect>`; });
+  imp+=`</svg>`;
+  html+=`<h3 class="eyebrow" style="margin:18px 0 6px">Which assumptions decide the winner</h3><div class="chart">${imp}</div>
+    <div class="legend"><span><i class="box" style="background:var(--m1)"></i>Logistic regression (${pct(r.models[MODEL_NAMES[0]].accuracy)} accurate)</span><span><i class="box" style="background:var(--m2)"></i>Random forest (${pct(r.models[MODEL_NAMES[1]].accuracy)} accurate)</span></div>
+    <p class="hint" style="margin:6px 0 10px">Importance is how many points of accuracy a model loses when that input is shuffled.</p>`;
+  html+=`<div class="tbl-wrap"><table class="data"><thead><tr><th>Input</th><th>Log. regression</th><th>Random forest</th><th style="white-space:normal">Higher value, for ${name(winner)}</th></tr></thead><tbody>`+
+    idx.map(j=>{ const dv=r.direction[j]; return `<tr><td>${label(r.paths[j])}</td><td>${(lrI[j]*100).toFixed(1)} pts</td><td>${(rfI[j]*100).toFixed(1)} pts</td><td class="${dv>0?"dir-up":"dir-down"}">${dv>0?"▲ helps":"▼ hurts"}</td></tr>`; }).join("")+`</tbody></table></div>`;
+  // Plain-English summary
+  const top2=idx.slice(0,2).map(j=>inSentence(r.paths[j]));
+  html=`<p style="margin:0 0 12px;max-width:78ch"><b>${name(winner)}</b> wins ${pct(r.winRates[winner])} of the scenarios. The logistic regression predicts the winner ${pct(r.models[MODEL_NAMES[0]].accuracy)} of the time and the random forest ${pct(r.models[MODEL_NAMES[1]].accuracy)}, against ${pct(r.benchmark)} for always guessing the most common route. The assumptions that most decide the winner are ${top2.join(" and ")}.</p>`+html;
+  out.innerHTML=html;
+}
+
 renderInputs();
 recompute();
+startMl();
 </script>
 </body>
 </html>
