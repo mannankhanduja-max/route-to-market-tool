@@ -238,3 +238,36 @@ sensitivity:
   top_inputs:
     value: 3
     source: "Presentation. Number of inputs reported in the recommendation's 'stops winning' list."
+
+# Machine-learning check: sample many scenarios with every input moved at
+# once, label each with the route the VMR model picks, and train a logistic
+# regression and a random forest to predict that label from the inputs.
+# The models learn this model's logic, not real market data.
+machine_learning:
+  input_range:
+    value: 0.25
+    source: "Assumption. Each input is drawn uniformly within +/-25% of its base value, all inputs at once; wider than the +/-20% one-at-a-time tornado because joint moves are the point."
+  n_samples:
+    value: 2000
+    source: "Numerical. Enough draws for stable win rates (standard error below 1.2 points) while the dashboard stays responsive."
+  seed:
+    value: 42
+    source: "Reproducibility. Fixed random seed for the sample, the train/test split and the random forest."
+  test_share:
+    value: 0.25
+    source: "Convention. Share of draws held out to measure how well each model predicts the winner."
+  lr_regularisation:
+    value: 1.0
+    source: "scikit-learn default (C = 1.0) for logistic regression on standardised inputs."
+  rf_trees:
+    value: 200
+    source: "Convention. Enough trees for stable predictions; more changes accuracy by well under a point here."
+  rf_min_leaf:
+    value: 5
+    source: "Judgment. Minimum draws per leaf, to stop trees memorising single draws."
+  importance_repeats:
+    value: 5
+    source: "Numerical. Shuffles per input when measuring permutation importance; the ranking of the top inputs is stable from about 3."
+  top_features:
+    value: 10
+    source: "Presentation. Number of inputs shown in the importance chart."

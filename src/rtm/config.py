@@ -129,6 +129,21 @@ class SensitivitySettings:
 
 
 @dataclass(frozen=True)
+class MLSettings:
+    """Settings for the machine-learning check (sample size, seed, model settings)."""
+
+    input_range: float
+    n_samples: int
+    seed: int
+    test_share: float
+    lr_regularisation: float
+    rf_trees: int
+    rf_min_leaf: int
+    importance_repeats: int
+    top_features: int
+
+
+@dataclass(frozen=True)
 class Scenario:
     """A complete, validated scenario."""
 
@@ -141,6 +156,7 @@ class Scenario:
     weights: dict[str, float]
     anchors: dict[str, dict[str, Anchor]]
     sensitivity: SensitivitySettings
+    ml: MLSettings
     sources: dict[str, str]
 
     @property
@@ -289,6 +305,10 @@ def parse_scenario(raw: dict[str, Any]) -> Scenario:
     downside = Downside(**_section(raw["downside"], Downside, "downside", sources))
     weights = {d: float(_value(raw["weights"][d], f"weights.{d}", sources)) for d in DIMENSIONS}
     sens = _section(raw["sensitivity"], SensitivitySettings, "sensitivity", sources)
+    ml = _section(raw["machine_learning"], MLSettings, "machine_learning", sources)
+    for f in fields(MLSettings):
+        if f.type == "int":  # YAML may give 2000.0; counts and seeds must be whole
+            ml[f.name] = int(ml[f.name])
     scenario = Scenario(
         name=meta["name"],
         currency=meta["currency"],
@@ -299,6 +319,7 @@ def parse_scenario(raw: dict[str, Any]) -> Scenario:
         weights=weights,
         anchors=_anchors(raw["scoring"], sources),
         sensitivity=SensitivitySettings(**{**sens, "top_inputs": int(sens["top_inputs"])}),
+        ml=MLSettings(**ml),
         sources=sources,
     )
     _validate(scenario)

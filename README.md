@@ -48,12 +48,25 @@ Weights: Velocity 40%, Margin 35%, Robustness 25%. Scores are 0-100.
 
 The two channel takes are the assumptions to test first: they move the ranking more than market size, CAC or timing. The full generated recommendation, including the top three risks and next steps, is in [`docs/results.md`](docs/results.md).
 
+### Machine-learning check: what if every assumption is off at once?
+
+The tornado moves one input at a time. To see what happens when all 38 inputs are uncertain together, the tool draws 2,000 scenarios, moving every input within ±25% of its base value. Each scenario is labelled with the route the VMR model picks, and a **logistic regression** and a **random forest** are trained to predict that route from the inputs.
+
+![Machine-learning check](docs/figures/ml_check.png)
+
+- **The recommendation is fairly robust.** The reseller network wins 69% of the scenarios, the strategic partner 20% and direct sales 11%.
+- **Both models learn the decision well.** On held-out scenarios the logistic regression predicts the winner 91% of the time and the random forest 78%, against 69% for always guessing "reseller". Both give the reseller network a 98-100% chance in the base case. The logistic regression does better because the boundary between routes is close to linear in the inputs, which suits it more than a forest of step-shaped splits.
+- **The same assumptions matter when everything moves.** Shuffling either channel take costs both models the most accuracy, followed by reseller reach and gross margin. This matches the tornado, so the one-at-a-time view was not hiding a joint effect.
+
+The models learn this tool's own logic from synthetic scenarios, not real market outcomes. They are a stress test of the recommendation, not a prediction about the market.
+
 ## Method
 
 1. **Financial model.** Each route is projected month by month for 36 months. Revenue ramps on an S-curve from the route's first-revenue month. The route then pays its channel take, customer acquisition cost (CAC) and fixed costs. This gives the cash curve, breakeven month, peak funding and margins.
 2. **VMR scoring.** Nine metrics (three to four per dimension) are each scaled 0-100 between fixed "worst" and "best" anchors. They are averaged within each dimension, then combined with the 40/35/25 weights. `python -m rtm` prints every step.
 3. **Sensitivity.** A weight sweep and a map of every weight combination, a ±20% tornado on every input, a search for the input change that flips the ranking, and a downside case with a market shock plus the loss of the main intermediary.
 4. **Recommendation.** The text is generated from the results by rules, so it always matches the numbers.
+5. **Machine-learning check.** 2,000 scenarios with every input moved at once (fixed seed), labelled by the VMR model; a logistic regression and a random forest (scikit-learn) are trained on 75% and tested on 25%, with permutation importance on the held-out draws.
 
 Formulas and judgment calls: [`docs/methodology.md`](docs/methodology.md). The hypothesis tree behind the three dimensions is in [`docs/hypothesis_tree.md`](docs/hypothesis_tree.md).
 
@@ -84,11 +97,12 @@ src/rtm/finance.py        revenue ramp, cash curve, breakeven
 src/rtm/scoring.py        VMR scores, weights, ranking, workings table
 src/rtm/sensitivity.py    weight sweep, weight map, tornado, flip thresholds, downside
 src/rtm/recommend.py      plain-English recommendation
+src/rtm/ml.py             logistic regression and random forest check
 src/rtm/charts.py         charts shared by the app, README and PDF
 docs/index.html           the browser version (plain HTML + JS, served by GitHub Pages)
 app.py                    Streamlit dashboard
 scripts/build_report.py   regenerates docs/figures, docs/results.md, docs/one_page_summary.pdf
-tests/                    unit tests for config, finance, scoring, sensitivity, recommendation, app
+tests/                    unit tests for config, finance, scoring, sensitivity, recommendation, ML, app
 ```
 
-Python 3.11+. Dependencies: numpy, pandas, matplotlib, streamlit, pyyaml, pytest, ruff. MIT licence.
+Python 3.11+. Dependencies: numpy, pandas, matplotlib, streamlit, pyyaml, scikit-learn, pytest, ruff. MIT licence.

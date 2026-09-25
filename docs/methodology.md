@@ -128,7 +128,36 @@ The text is generated from the results, so it cannot drift from the numbers.
   through the winner's ramp; keep the runner-up as the fallback with the
   condition under which it takes over.
 
-## 5. Limitations
+## 5. Machine-learning check (`src/rtm/ml.py`)
+
+There is no historical data on market entries in this project, so the models
+are **surrogates**: they learn the VMR model's own decision rule. This shows
+how the recommendation behaves when every assumption is uncertain at once,
+which the one-at-a-time tornado cannot.
+
+| Step | What happens |
+|---|---|
+| Sample | 2,000 draws. Every non-zero input is drawn independently and uniformly within ±25% of its base value; shares are clipped to [0, 1]. Seed 42. |
+| Label | Each draw is scored with the same VMR arithmetic (`total_scores`, a DataFrame-free copy of `score_routes`, tested to match it) and labelled with the top route. |
+| Split | 75% train, 25% test, stratified by winner. |
+| Logistic regression | Multinomial, on standardised inputs, C = 1.0. |
+| Random forest | 200 trees, at least 5 draws per leaf. |
+| Accuracy | Share of test draws where the predicted winner is right, against the benchmark of always predicting the most common winner. |
+| Importance | Permutation importance on the test draws: the drop in accuracy when one input is shuffled (5 repeats). Inputs are ranked by the average of the two models. |
+| Direction | The logistic regression's standardised coefficient for the base-case winner. Positive means a higher value makes it more likely to stay on top. |
+
+### Judgment calls
+
+- **Independent uniform draws.** Real assumptions are correlated (a weak
+  market usually means lower share *and* longer ramps). Independent draws are
+  the neutral starting point; the downside case covers one correlated shock.
+- **±25% for every input.** Some inputs are much less certain than others.
+  A per-input range would be better once there is evidence to set it.
+- **Surrogates, not forecasts.** The models learn how this tool decides, not
+  how markets behave. High accuracy means the decision rule is simple to learn
+  from the inputs; it says nothing about whether the inputs are right.
+
+## 6. Limitations
 
 - All inputs are synthetic. The tool shows the reasoning; the numbers need to be
   replaced with market research before a real decision.

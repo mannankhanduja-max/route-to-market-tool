@@ -22,3 +22,10 @@ def test_moving_a_weight_changes_the_recommendation():
     at.run()
     assert not at.exception
     assert "strategic partner" in at.markdown[0].value.lower()
+
+
+def test_machine_learning_tab_runs():
+    at = AppTest.from_file(APP, default_timeout=TIMEOUT_SECONDS).run()
+    at.toggle(key="run_ml").set_value(True).run()
+    assert not at.exception
+    assert any("Share of scenarios each route wins" in m.value for m in at.markdown)

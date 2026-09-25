@@ -7,6 +7,7 @@ import sys
 import pandas as pd
 
 from rtm.config import DEFAULT_SCENARIO, load_scenario
+from rtm.ml import model_table, run_ml_check
 from rtm.recommend import build_recommendation
 from rtm.scoring import score_routes, summary_table
 from rtm.sensitivity import downside_table, tornado, weight_flips
@@ -30,6 +31,13 @@ def main(path: str = str(DEFAULT_SCENARIO)) -> None:
     print(tornado(scenario)[cols].head(10).round(2).to_string(index=False))
     print("\nDownside case")
     print(downside_table(scenario).round(2).to_string(index=False))
+    ml = run_ml_check(scenario, result.winner)
+    print(f"\nMachine-learning check ({len(ml.sample):,} scenarios, every input moved at once)")
+    print("Win rates: " + ", ".join(f"{k} {v:.0%}" for k, v in ml.win_rates.items()))
+    if ml.trained:
+        print(model_table(scenario, ml).round(3).to_string(index=False))
+        cols = ["label", "Logistic regression importance", "Random forest importance"]
+        print(ml.importance[cols].head(scenario.ml.top_features).round(3).to_string(index=False))
     print("\n" + build_recommendation(scenario).to_markdown())
 
 
