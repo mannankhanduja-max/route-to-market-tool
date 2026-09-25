@@ -6,6 +6,8 @@
 
 **How sure:** It ranks first in 54% of all possible weightings and still ranks first in the downside case. The answer changes if resellers demand a margin above ~38% (30% assumed).
 
+**Try it in the browser:** [Route-to-Market Scorer](https://mannankhanduja-max.github.io/route-to-market-tool/). Enter your own market, routes and weights and get the VMR scores, cash curves, sensitivity and recommendation live. It runs the same model as the Python code; a test checks the two agree.
+
 ![VMR scores and cumulative cash by route](docs/figures/key_chart.png)
 
 *Left: each route's total, split into weighted Velocity, Margin and Robustness points. Right: cumulative cash over 36 months. The partner pays back first (month 26) but keeps the least of each euro and stakes everything on one relationship. Direct sales is the most robust but needs €13m of funding and does not pay back within five years.*
@@ -83,6 +85,7 @@ src/rtm/scoring.py        VMR scores, weights, ranking, workings table
 src/rtm/sensitivity.py    weight sweep, weight map, tornado, flip thresholds, downside
 src/rtm/recommend.py      plain-English recommendation
 src/rtm/charts.py         charts shared by the app, README and PDF
+docs/index.html           the browser version (plain HTML + JS, served by GitHub Pages)
 app.py                    Streamlit dashboard
 scripts/build_report.py   regenerates docs/figures, docs/results.md, docs/one_page_summary.pdf
 tests/                    unit tests for config, finance, scoring, sensitivity, recommendation, app

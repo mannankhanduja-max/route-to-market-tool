@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+<title>Route-to-Market Scorer</title>
+<meta name="description" content="Enter your market, your candidate routes to market and your weights; the page scores each route on Velocity, Margin and Robustness and tells you which one to pick and when that answer changes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#f5f6f3; --panel:#ffffff; --sunk:#eceee9; --line:#d9dcd4; --line-2:#c4c8be;
+  --ink:#141a22; --ink-2:#4a5260; --ink-3:#7d8591;
+  --accent:#6b2f5b; --accent-ink:#ffffff; --accent-soft:#f1e6ee;
+  --good:#1a7f4b; --warn:#a15c00; --bad:#b3261e; --warn-soft:#fbefdc; --bad-soft:#fbe7e5;
+  --r1:#2a78d6; --r2:#eb6834; --r3:#1baf7a; --r4:#eda100; --r5:#e87ba4;
+  --dv:#1c5cab; --dm:#3987e5; --dr:#9ec5f4; --dv-t:#ffffff; --dm-t:#ffffff; --dr-t:#0b0b0b;
+  --low:#86b6ef; --high:#1c5cab;
+  --grid:#e4e6e0;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#121519; --panel:#1a1e24; --sunk:#20252c; --line:#2d333c; --line-2:#3b424d;
+    --ink:#eef0f2; --ink-2:#b4bac3; --ink-3:#8a919c;
+    --accent:#d58bc1; --accent-ink:#1a0f17; --accent-soft:#35222f;
+    --good:#4cc38a; --warn:#e3a33c; --bad:#f07a70; --warn-soft:#3a2c14; --bad-soft:#3d1f1c;
+    --r1:#3987e5; --r2:#d95926; --r3:#199e70; --r4:#c98500; --r5:#d55181;
+    --dv:#9ec5f4; --dm:#3987e5; --dr:#1c5cab; --dv-t:#0b0b0b; --dm-t:#ffffff; --dr-t:#ffffff;
+    --low:#6da7ec; --high:#184f95; --grid:#2a3038;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#121519; --panel:#1a1e24; --sunk:#20252c; --line:#2d333c; --line-2:#3b424d;
+  --ink:#eef0f2; --ink-2:#b4bac3; --ink-3:#8a919c;
+  --accent:#d58bc1; --accent-ink:#1a0f17; --accent-soft:#35222f;
+  --good:#4cc38a; --warn:#e3a33c; --bad:#f07a70; --warn-soft:#3a2c14; --bad-soft:#3d1f1c;
+  --r1:#3987e5; --r2:#d95926; --r3:#199e70; --r4:#c98500; --r5:#d55181;
+  --dv:#9ec5f4; --dm:#3987e5; --dr:#1c5cab; --dv-t:#0b0b0b; --dm-t:#ffffff; --dr-t:#ffffff;
+  --low:#6da7ec; --high:#184f95; --grid:#2a3038;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:1360px;margin:0 auto}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* masthead */
+.mast{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px 24px;padding-block:28px 18px;border-bottom:1px solid var(--line)}
+.mast h1{font-size:clamp(26px,3.4vw,40px);font-weight:800;font-stretch:78%;letter-spacing:-.01em;line-height:1}
+.mast p{margin:6px 0 0;color:var(--ink-2);max-width:62ch}
+.mast .vmr{display:inline-flex;gap:0;font-family:var(--display);font-stretch:70%;font-weight:800;font-size:13px;letter-spacing:.08em}
+.vmr span{padding:3px 8px;border:1px solid var(--line-2)}
+.vmr span+span{border-left:none}
+.vmr b{font-weight:800}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line-2);background:var(--panel);padding:7px 12px;border-radius:6px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:3px 9px;font-size:12.5px}
+
+/* layout */
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:24px;margin-top:22px}
+@media (min-width:1100px){.grid{grid-template-columns:minmax(0,11fr) minmax(0,12fr)}.inputs{order:0}.results{order:1}}
+.results{display:flex;flex-direction:column;gap:18px;min-width:0}
+.inputs{display:flex;flex-direction:column;gap:18px;min-width:0}
+@media (max-width:1099px){.results{order:0}.inputs{order:1}}
+
+section.block{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.block>header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.block h2{font-size:17px;font-weight:700;font-stretch:88%}
+.eyebrow{font-family:var(--display);font-stretch:75%;font-weight:700;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.hint{color:var(--ink-3);font-size:12.5px}
+
+/* form rows */
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px 16px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12.5px;color:var(--ink-2);font-weight:500}
+.inbox{display:flex;align-items:center;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);overflow:hidden}
+.inbox:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.inbox input{border:0;background:transparent;padding:6px 8px;width:100%;min-width:0;font-family:var(--mono);font-variant-numeric:tabular-nums;outline:none}
+.inbox .u{padding:0 8px;color:var(--ink-3);font-size:12px;white-space:nowrap;border-left:1px solid var(--line)}
+select.plain,input.plain{border:1px solid var(--line-2);border-radius:6px;background:var(--panel);padding:6px 8px;width:100%}
+
+/* route matrix */
+.matrix-wrap{overflow-x:auto;margin-inline:-4px;padding-inline:4px}
+table.matrix{border-collapse:separate;border-spacing:0;width:100%;min-width:480px}
+.matrix thead th:not(:first-child){min-width:118px}
+.matrix th,.matrix td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+.matrix thead th{border-bottom:2px solid var(--line-2);text-align:left}
+.matrix tbody th{font-weight:500;color:var(--ink-2);font-size:12.5px;text-align:left;width:118px;min-width:108px}
+.matrix tbody th small{display:block;color:var(--ink-3);font-weight:400;font-size:11px}
+.matrix .grp td{padding-top:12px;border-bottom:none}
+.route-head{display:flex;align-items:center;gap:6px}
+.swatch{width:10px;height:10px;border-radius:2px;flex:none}
+.route-head input{border:1px solid transparent;border-radius:5px;background:transparent;padding:4px 5px;font-weight:600;width:100%;min-width:0;text-overflow:ellipsis}
+.route-head input:hover{border-color:var(--line-2)}
+.route-head input:focus{border-color:var(--accent);background:var(--panel)}
+.x{border:none;background:none;color:var(--ink-3);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:15px;line-height:1}
+.x:hover{color:var(--bad);background:var(--bad-soft)}
+.matrix td .inbox input{padding:5px 6px}
+
+/* weights */
+.weights{display:grid;gap:10px}
+.wrow{display:grid;grid-template-columns:110px minmax(0,1fr) 62px 52px;gap:10px;align-items:center}
+.wrow label{font-weight:600}
+.wrow input[type=range]{width:100%;accent-color:var(--accent)}
+.wrow .share{color:var(--ink-3);text-align:right}
+.wrow .inbox input{text-align:right}
+
+details.adv{border-top:1px solid var(--line);margin-top:4px;padding-top:10px}
+details.adv summary{cursor:pointer;font-weight:600;color:var(--ink-2)}
+table.anchors{border-collapse:collapse;width:100%;min-width:560px;margin-top:10px}
+.anchors th,.anchors td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+.anchors th{font-size:12px;color:var(--ink-3);font-weight:600}
+.anchors td:first-child{font-weight:600}
+
+/* verdict */
+.verdict{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:grid;gap:14px}
+.verdict .kicker{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line-2)}
+.pill.good{color:var(--good);border-color:currentColor}
+.pill.warn{color:var(--warn);border-color:currentColor;background:var(--warn-soft)}
+.pill.bad{color:var(--bad);border-color:currentColor;background:var(--bad-soft)}
+.verdict h2{font-size:clamp(22px,2.4vw,30px);font-weight:800;font-stretch:80%;line-height:1.1}
+.verdict h2 em{font-style:normal;color:var(--accent)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.kpi{background:var(--panel);padding:10px 12px}
+.kpi .v{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .s{color:var(--ink-3);font-size:12px}
+
+/* charts */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--body);font-size:11px;fill:var(--ink-2)}
+.chart .lbl-strong{fill:var(--ink);font-weight:600;font-family:var(--mono)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink-2);margin-top:8px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend i.box{height:10px;width:10px}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line-2);border-radius:6px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgb(0 0 0 / .12);min-width:170px;z-index:2}
+.tip .row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.tip .row span:first-child{display:inline-flex;gap:6px;align-items:center;color:var(--ink-2)}
+.tip b{font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums}
+
+/* tables */
+.tbl-wrap{overflow-x:auto}
+table.data{border-collapse:collapse;width:100%;font-size:13px}
+.data th,.data td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.data th:first-child,.data td:first-child{text-align:left}
+.data thead th{font-size:11.5px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line-2)}
+.data td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.data td:first-child{font-family:var(--body);font-weight:500}
+.data tr.win td{background:var(--accent-soft)}
+.data .rank{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--sunk);font-size:11px;margin-right:6px;font-family:var(--mono)}
+.data tr.win .rank{background:var(--accent);color:var(--accent-ink)}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+@media (min-width:760px){.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+
+ul.cond,ol.cond{margin:0;padding-left:20px;display:grid;gap:6px;max-width:75ch}
+.rec{display:grid;gap:14px}
+.rec h3{font-size:13px;font-stretch:80%;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.issues{display:grid;gap:6px}
+.issue{border:1px solid currentColor;color:var(--bad);background:var(--bad-soft);border-radius:6px;padding:8px 10px;font-size:13px}
+.issue.warn{color:var(--warn);background:var(--warn-soft)}
+.issue span{color:var(--ink)}
+.foot{color:var(--ink-3);font-size:12px;margin-top:28px;max-width:90ch}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:6px;font-size:13px}
+textarea.json{width:100%;min-height:140px;font-family:var(--mono);font-size:12px;border:1px solid var(--line-2);border-radius:6px;background:var(--panel);padding:8px}
+@media (prefers-reduced-motion:no-preference){.bar-anim{transition:width .25s ease}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <div class="vmr" aria-label="Velocity, Margin, Robustness"><span><b>V</b>elocity</span><span><b>M</b>argin</span><span><b>R</b>obustness</span></div>
+      <h1 style="margin-top:10px">Route-to-Market Scorer</h1>
+      <p>Enter your market and the routes you are weighing. Each route is projected month by month, scored 0–100 on Velocity, Margin and Robustness, and stress-tested. The page opens with a worked example: a B2B software company entering a new European country.</p>
+    </div>
+    <div class="tools">
+      <button class="btn" id="btn-example" type="button">Load example</button>
+      <button class="btn" id="btn-json" type="button">Import / export</button>
+    </div>
+  </header>
+
+  <section class="block" id="json-panel" hidden style="margin-top:18px">
+    <header><h2>Scenario as JSON</h2><span class="hint">Copy it to keep your inputs, or paste one in and apply it.</span></header>
+    <textarea class="json" id="json-text" spellcheck="false" aria-label="Scenario JSON"></textarea>
+    <div class="tools" style="margin-top:8px">
+      <button class="btn" id="btn-copy" type="button">Copy</button>
+      <button class="btn primary" id="btn-apply" type="button">Apply pasted JSON</button>
+      <span class="hint" id="json-msg"></span>
+    </div>
+  </section>
+
+  <div class="grid">
+    <!-- INPUTS -->
+    <div class="inputs">
+      <section class="block">
+        <header><h2>Market</h2><span class="eyebrow">Shared by every route</span></header>
+        <div class="fields" id="market-fields"></div>
+      </section>
+
+      <section class="block">
+        <header>
+          <h2>Routes</h2>
+          <button class="btn small" id="btn-add" type="button">+ Add route</button>
+        </header>
+        <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+        <p class="hint" style="margin:10px 0 0">Channel take is the reseller margin or partner revenue share, as a share of what customers pay. Concentration risk is a 0–100 judgment rating; partner dependency is the share of revenue that runs through the largest intermediary.</p>
+      </section>
+
+      <section class="block">
+        <header><h2>Weights</h2><span class="hint">Rescaled to sum to 100%</span></header>
+        <div class="weights" id="weights"></div>
+      </section>
+
+      <section class="block">
+        <header><h2>Downside case</h2><span class="eyebrow">Feeds Robustness</span></header>
+        <div class="fields" id="downside-fields"></div>
+        <details class="adv" id="anchors-panel">
+          <summary>Scoring anchors (advanced)</summary>
+          <p class="hint">Each metric scores 0 at <em>worst</em> and 100 at <em>best</em>, capped at both ends. Metric weights are averaged within their dimension.</p>
+          <div class="tbl-wrap"><table class="anchors" id="anchors"></table></div>
+        </details>
+      </section>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="results" aria-live="polite">
+      <div class="issues" id="issues"></div>
+      <div class="verdict" id="verdict"></div>
+
+      <section class="block">
+        <header><h2>VMR score by route</h2><span class="hint">Weighted points per dimension</span></header>
+        <div class="chart" id="score-chart"></div>
+        <div class="legend" id="score-legend"></div>
+        <div class="tbl-wrap" style="margin-top:12px"><table class="data" id="score-table"></table></div>
+      </section>
+
+      <section class="block">
+        <header><h2>Cumulative cash</h2><span class="hint">Solid = base case, dashed = downside. Hover for values.</span></header>
+        <div class="chart" id="cash-chart"></div>
+        <div class="legend" id="cash-legend"></div>
+      </section>
+
+      <section class="block">
+        <header><h2>Recommendation</h2><span class="eyebrow">Generated from the numbers</span></header>
+        <div class="rec" id="rec"></div>
+      </section>
+
+      <section class="block">
+        <header><h2>What moves the ranking most</h2><span class="hint" id="tornado-hint"></span></header>
+        <div class="chart" id="tornado"></div>
+        <div class="legend" id="tornado-legend"></div>
+      </section>
+
+      <section class="block">
+        <header><h2>Financials and downside</h2></header>
+        <div class="tbl-wrap"><table class="data" id="fin-table"></table></div>
+      </section>
+
+      <section class="block">
+        <header><h2>Scoring workings</h2><span class="hint">Raw value → 0–100 score → weighted into its dimension</span></header>
+        <div class="tbl-wrap"><table class="data" id="workings"></table></div>
+      </section>
+    </div>
+  </div>
+
+  <p class="foot">Method: revenue ramps on an S-curve from each route's first-revenue month to steady state (market size × target share × reach). Contribution is revenue × (gross margin − channel take); cash flow subtracts CAC on new and replacement customers, fixed costs and set-up. Breakeven past the horizon is projected at the final month's cash flow. Scores use fixed anchors, so one route's score never moves because another route changed. Same model as the open-source Python tool; the example figures are synthetic.</p>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script id="model">
+/* ---------- Model: a direct port of src/rtm (finance, scoring, sensitivity) ---------- */
+const DIMS = ["velocity","margin","robustness"];
+const METRICS = {
+  velocity:["months_to_first_revenue","breakeven_month","onboarding_months"],
+  margin:["run_rate_margin","cumulative_margin"],
+  robustness:["downside_revenue_retention","concentration_risk","partner_dependency","lock_in_months"],
+};
+const METRIC_LABELS = {
+  months_to_first_revenue:"Months to first revenue", breakeven_month:"Breakeven month",
+  onboarding_months:"Onboarding months", run_rate_margin:"Run-rate cash margin",
+  cumulative_margin:"Cumulative cash ÷ revenue", downside_revenue_retention:"Downside revenue kept",
+  concentration_risk:"Concentration risk", partner_dependency:"Partner dependency", lock_in_months:"Lock-in months",
+};
+const MARKET_FIELDS = ["annual_market_size","target_share","annual_price_per_customer","gross_margin","annual_churn"];
+const ROUTE_FIELDS = ["onboarding_months","months_to_first_revenue","ramp_months","reach","channel_take","cac",
+  "fixed_setup_cost","monthly_fixed_cost","concentration_risk","partner_dependency","lock_in_months"];
+const DOWNSIDE_FIELDS = ["market_shock","partner_loss_month","partner_loss_recovery_months"];
+const FRACTIONS = new Set(["target_share","gross_margin","annual_churn","reach","channel_take","concentration_risk","partner_dependency"]);
+const SENS = {tornado_swing:0.20, weight_resolution:0.001, weight_map_step:0.05, flip_search_max:1.0, flip_search_step:0.01, top_inputs:3};
+
+const clip = (x,a,b)=>Math.min(Math.max(x,a),b);
+
+function simulate(route, market, H, downside){
+  const n=H, rev=new Array(n), cf=new Array(n), cum=new Array(n);
+  const steady = market.annual_market_size*market.target_share*route.reach;
+  let prevCust=0, run=0, total=0;
+  for(let i=0;i<n;i++){
+    const t=i+1;
+    const x=clip((t-route.months_to_first_revenue+1)/route.ramp_months,0,1);
+    let r=steady/12*(x*x*(3-2*x));
+    if(downside){
+      const progress=clip((t-downside.partner_loss_month)/downside.partner_loss_recovery_months,0,1);
+      const lost = t>=downside.partner_loss_month ? 1-progress : 0;
+      r = r*(1+downside.market_shock)*(1-route.partner_dependency*lost);
+    }
+    const cust=r*12/market.annual_price_per_customer;
+    const adds=Math.max(cust-prevCust,0); prevCust=cust;
+    const acq=(adds+cust*market.annual_churn/12)*route.cac;
+    const contrib=r*(market.gross_margin-route.channel_take);
+    const fixed=route.monthly_fixed_cost+(i===0?route.fixed_setup_cost:0);
+    const flow=contrib-acq-fixed;
+    run+=flow; total+=r;
+    rev[i]=r; cf[i]=flow; cum[i]=run;
+  }
+  let be=null;
+  for(let i=0;i<n;i++){ if(cum[i]>=0){be=i+1;break;} }
+  let proj;
+  if(be!==null) proj=be;
+  else proj = cf[n-1]<=0 ? Infinity : n - cum[n-1]/cf[n-1];
+  let minCum=Infinity; for(const c of cum) minCum=Math.min(minCum,c);
+  return {revenue:rev, cashFlow:cf, cumulative:cum, total,
+    breakeven:be, projected:proj, peakFunding:Math.max(0,-minCum),
+    runRate: rev[n-1]>0 ? cf[n-1]/rev[n-1] : -Infinity,
+    cumMargin: total>0 ? cum[n-1]/total : -Infinity};
+}
+const retention=(b,d)=> b.total>0 ? d.total/b.total : 0;
+
+function runFinancials(s){
+  const base=[], down=[];
+  for(const r of s.routes){ base.push(simulate(r,s.market,s.horizon_months)); down.push(simulate(r,s.market,s.horizon_months,s.downside)); }
+  return {base,down};
+}
+function scale(v,a){ const sh=(v-a.worst)/(a.best-a.worst); const c=Number.isNaN(sh)?0:clip(sh,0,1); return 100*c+0; }
+function normalise(w){ const t=Object.values(w).reduce((x,y)=>x+y,0); const o={}; for(const k in w) o[k]=t>0?w[k]/t:0; return o; }
+
+function score(s, fin, stressed=false){
+  fin = fin || runFinancials(s);
+  const workings=[], dims=[];
+  s.routes.forEach((r,i)=>{
+    const b=fin.base[i], d=fin.down[i], view=stressed?d:b;
+    const vals={months_to_first_revenue:r.months_to_first_revenue, breakeven_month:view.projected,
+      onboarding_months:r.onboarding_months, run_rate_margin:view.runRate, cumulative_margin:view.cumMargin,
+      downside_revenue_retention:retention(b,d), concentration_risk:r.concentration_risk,
+      partner_dependency:r.partner_dependency, lock_in_months:r.lock_in_months};
+    const row={};
+    for(const dim of DIMS){
+      const anchors=s.anchors[dim];
+      const mw=normalise(Object.fromEntries(METRICS[dim].map(m=>[m,anchors[m].weight])));
+      let sum=0;
+      for(const m of METRICS[dim]){
+        const sc=scale(vals[m],anchors[m]);
+        workings.push({route:i,dim,metric:m,value:vals[m],worst:anchors[m].worst,best:anchors[m].best,score:sc,weight:mw[m],contribution:sc*mw[m]});
+        sum+=sc*mw[m];
+      }
+      row[dim]=sum;
+    }
+    dims.push(row);
+  });
+  const w=normalise(s.weights);
+  const totals=dims.map(d=>DIMS.reduce((a,k)=>a+d[k]*w[k],0));
+  const ranking=totals.map((t,i)=>i).sort((a,b)=>totals[b]-totals[a]||a-b);
+  return {workings,dims,totals,weights:w,ranking,winner:ranking[0],runnerUp:ranking[1],lead:totals[ranking[0]]-totals[ranking[1]]};
+}
+function combine(dims,w){ const n=normalise(w); return dims.map(d=>DIMS.reduce((a,k)=>a+d[k]*n[k],0)); }
+function argmax(a){ let b=0; for(let i=1;i<a.length;i++) if(a[i]>a[b]) b=i; return b; }
+function lineWeights(def,dim,w){
+  const others=DIMS.filter(d=>d!==dim), rest=others.reduce((a,d)=>a+def[d],0), out={[dim]:w};
+  for(const d of others) out[d]=(1-w)*(rest>0?def[d]/rest:1/others.length);
+  return out;
+}
+function weightFlips(res){
+  const steps=Math.round(1/SENS.weight_resolution), out=[];
+  for(const dim of DIMS){
+    const def=res.weights[dim]; let up=null, down=null;
+    for(let k=0;k<=steps;k++){
+      const w=k/steps, win=argmax(combine(res.dims,lineWeights(res.weights,dim,w)));
+      if(win===res.winner) continue;
+      if(w>def && up===null) up={w,win};
+      if(w<def) down={w,win};
+    }
+    if(up) out.push({dim,def,dir:"up",w:up.w,win:up.win});
+    if(down) out.push({dim,def,dir:"down",w:down.w,win:down.win});
+  }
+  return out;
+}
+function weightShare(res){
+  const steps=Math.round(1/SENS.weight_map_step), wins=new Array(res.dims.length).fill(0); let n=0;
+  for(let i=0;i<=steps;i++) for(let j=0;j<=steps-i;j++){
+    wins[argmax(combine(res.dims,{velocity:i/steps,margin:j/steps,robustness:(steps-i-j)/steps}))]++; n++;
+  }
+  return wins.map(x=>x/n);
+}
+function inputPaths(s){
+  const p=MARKET_FIELDS.map(f=>["market",f]);
+  s.routes.forEach((r,i)=>ROUTE_FIELDS.forEach(f=>p.push(["routes",i,f])));
+  DOWNSIDE_FIELDS.forEach(f=>p.push(["downside",f]));
+  return p;
+}
+function getP(s,p){ return p[0]==="routes" ? s.routes[p[1]][p[2]] : s[p[0]][p[1]]; }
+function withP(s,p,v){
+  const c=structuredClone(s), f=p[p.length-1];
+  if(FRACTIONS.has(f)) v=clip(v,0,1);
+  if(p[0]==="routes") c.routes[p[1]][f]=v; else c[p[0]][f]=v;
+  return c;
+}
+const leadOf=(win,t)=>t[win]-Math.max(...t.filter((_,i)=>i!==win));
+function tornado(s,res){
+  const rows=[];
+  for(const p of inputPaths(s)){
+    const v=getP(s,p); if(v===0) continue;
+    const lo=score(withP(s,p,v*(1-SENS.tornado_swing))), hi=score(withP(s,p,v*(1+SENS.tornado_swing)));
+    rows.push({path:p,value:v,leadLow:leadOf(res.winner,lo.totals),leadHigh:leadOf(res.winner,hi.totals),winLow:lo.winner,winHigh:hi.winner});
+  }
+  rows.forEach(r=>r.range=Math.abs(r.leadHigh-r.leadLow));
+  return rows.sort((a,b)=>b.range-a.range);
+}
+function flipThreshold(s,p,winner){
+  const v=getP(s,p), n=Math.round(SENS.flip_search_max/SENS.flip_search_step), out={path:p,value:v};
+  for(const [dir,sign] of [["down",-1],["up",1]]){
+    out[dir]=null;
+    for(let k=1;k<=n;k++){
+      const ch=sign*k*SENS.flip_search_step, w=score(withP(s,p,v*(1+ch))).winner;
+      if(w!==winner){ out[dir]={change:ch,win:w}; break; }
+    }
+  }
+  return out;
+}
+function analyse(s){
+  const fin=runFinancials(s), res=score(s,fin), stressed=score(s,fin,true);
+  const torn=tornado(s,res);
+  const thresholds=torn.slice(0,SENS.top_inputs).map(r=>flipThreshold(s,r.path,res.winner));
+  return {fin,res,stressed,flips:weightFlips(res),share:weightShare(res),torn,thresholds};
+}
+</script>
+
+<script>
+/* ---------- Example scenario (same as data/scenario.yaml) ---------- */
+const EXAMPLE = {
+  name:"Mid-market B2B software company entering a new European country",
+  currency:"EUR", horizon_months:36,
+  market:{annual_market_size:150e6,target_share:0.06,annual_price_per_customer:30000,gross_margin:0.78,annual_churn:0.10},
+  routes:[
+    {label:"Direct sales",onboarding_months:4,months_to_first_revenue:10,ramp_months:24,reach:1.0,channel_take:0,cac:35000,fixed_setup_cost:1.2e6,monthly_fixed_cost:220000,concentration_risk:0.15,partner_dependency:0,lock_in_months:0},
+    {label:"Reseller network",onboarding_months:5,months_to_first_revenue:8,ramp_months:18,reach:0.75,channel_take:0.30,cac:8000,fixed_setup_cost:400000,monthly_fixed_cost:90000,concentration_risk:0.35,partner_dependency:0.35,lock_in_months:12},
+    {label:"Strategic partner",onboarding_months:6,months_to_first_revenue:7,ramp_months:12,reach:0.55,channel_take:0.45,cac:2000,fixed_setup_cost:300000,monthly_fixed_cost:50000,concentration_risk:0.60,partner_dependency:1.0,lock_in_months:36},
+  ],
+  downside:{market_shock:-0.30,partner_loss_month:18,partner_loss_recovery_months:12},
+  weights:{velocity:0.40,margin:0.35,robustness:0.25},
+  anchors:{
+    velocity:{months_to_first_revenue:{best:3,worst:18,weight:0.35},breakeven_month:{best:12,worst:60,weight:0.45},onboarding_months:{best:0,worst:12,weight:0.20}},
+    margin:{run_rate_margin:{best:0.5,worst:0,weight:0.6},cumulative_margin:{best:0.25,worst:-0.5,weight:0.4}},
+    robustness:{downside_revenue_retention:{best:1,worst:0.4,weight:0.4},concentration_risk:{best:0,worst:1,weight:0.2},partner_dependency:{best:0,worst:1,weight:0.2},lock_in_months:{best:0,worst:36,weight:0.2}},
+  },
+};
+const MAX_ROUTES=5, MIN_ROUTES=2, STORE_KEY="rtm-scorer-v1";
+const CURRENCIES={EUR:"€",USD:"$",GBP:"£",INR:"₹"};
+
+/* Field metadata: label, unit kind, help */
+const META = {
+  annual_market_size:{label:"Market size (annual spend)",kind:"money"},
+  target_share:{label:"Target share you could win",kind:"pct"},
+  annual_price_per_customer:{label:"Price per customer (annual)",kind:"money"},
+  gross_margin:{label:"Gross margin",kind:"pct"},
+  annual_churn:{label:"Customer churn per year",kind:"pct"},
+  onboarding_months:{label:"Onboarding",hint:"time to stand the route up",kind:"months"},
+  months_to_first_revenue:{label:"First revenue",hint:"month the first deal bills",kind:"months"},
+  ramp_months:{label:"Ramp",hint:"months to full run-rate",kind:"months"},
+  reach:{label:"Reach",hint:"share of target it can address",kind:"pct"},
+  channel_take:{label:"Channel take",hint:"commission or revenue share",kind:"pct"},
+  cac:{label:"CAC",hint:"per new customer",kind:"money"},
+  fixed_setup_cost:{label:"Set-up cost",hint:"one-off, month 1",kind:"money"},
+  monthly_fixed_cost:{label:"Fixed cost",hint:"per month",kind:"money"},
+  concentration_risk:{label:"Concentration risk",hint:"0 spread → 100 single point",kind:"rating"},
+  partner_dependency:{label:"Partner dependency",hint:"revenue via largest partner",kind:"pct"},
+  lock_in_months:{label:"Contract lock-in",hint:"months you are bound",kind:"months"},
+  market_shock:{label:"Market shock",kind:"pct"},
+  partner_loss_month:{label:"Main partner lost in month",kind:"month"},
+  partner_loss_recovery_months:{label:"Months to replace it",kind:"months"},
+};
+const ROUTE_GROUPS=[["Velocity inputs",["onboarding_months","months_to_first_revenue","ramp_months"]],
+  ["Margin inputs",["reach","channel_take","cac","fixed_setup_cost","monthly_fixed_cost"]],
+  ["Robustness inputs",["concentration_risk","partner_dependency","lock_in_months"]]];
+
+let S = load() || structuredClone(EXAMPLE);
+let A = null;
+
+function load(){ try{ const t=localStorage.getItem(STORE_KEY); return t?validateShape(JSON.parse(t)):null; }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(STORE_KEY,JSON.stringify(S)); }catch(e){} }
+function validateShape(o){
+  if(!o||!Array.isArray(o.routes)||o.routes.length<MIN_ROUTES||!o.market||!o.weights||!o.anchors||!o.downside) throw new Error("Missing market, routes, weights, anchors or downside.");
+  const base=structuredClone(EXAMPLE);
+  const out={...base,...o,market:{...base.market,...o.market},downside:{...base.downside,...o.downside},weights:{...base.weights,...o.weights},anchors:structuredClone(base.anchors)};
+  for(const d of DIMS) for(const m of METRICS[d]) if(o.anchors?.[d]?.[m]) out.anchors[d][m]={...out.anchors[d][m],...o.anchors[d][m]};
+  out.routes=o.routes.slice(0,MAX_ROUTES).map((r,i)=>({...base.routes[Math.min(i,2)],...r}));
+  for(const r of out.routes) for(const f of ROUTE_FIELDS) if(typeof r[f]!=="number"||!isFinite(r[f])) throw new Error(`Route "${r.label}" has no valid ${f}.`);
+  return out;
+}
+
+/* ---------- Formatting ---------- */
+const sym=()=>CURRENCIES[S.currency]??"";
+function money(x){ const s=x<0?"−":"", a=Math.abs(x);
+  if(a>=1e9) return `${s}${sym()}${(a/1e9).toFixed(1)}bn`;
+  if(a>=1e6) return `${s}${sym()}${(a/1e6).toFixed(1)}m`;
+  if(a>=1e3) return `${s}${sym()}${(a/1e3).toFixed(0)}k`;
+  return `${s}${sym()}${a.toFixed(0)}`; }
+const pct=x=>`${Math.round(x*100)}%`;
+const spct=x=>`${x>0?"+":"−"}${Math.round(Math.abs(x)*100)}%`;
+function monthTxt(v,H){ if(!isFinite(v)) return "not in sight"; return v>H?`month ${Math.round(v)} (projected)`:`month ${Math.round(v)}`; }
+function fmtInput(f,v){ const k=META[f]?.kind; if(k==="pct"||k==="rating") return pct(v); if(k==="money") return money(v); if(k==="months") return `${Math.round(v)} months`; if(k==="month") return `month ${Math.round(v)}`; return v.toFixed(2); }
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const L=i=>esc(S.routes[i].label||`Route ${i+1}`);
+const color=i=>`var(--r${i+1})`;
+function pathLabel(p){ const f=p[p.length-1], name=(META[f]?.label||f).toLowerCase();
+  return p[0]==="routes" ? `${S.routes[p[1]].label||"Route "+(p[1]+1)}: ${name}` : name[0].toUpperCase()+name.slice(1); }
+function phrase(p){ const f=p[p.length-1], name=(META[f]?.label||f).toLowerCase();
+  return p[0]==="routes" ? `the ${esc((S.routes[p[1]].label||"route").toLowerCase())}'s ${name}` : name; }
+
+/* ---------- Inputs: display <-> model units ---------- */
+function toDisplay(f,v){ const k=META[f]?.kind; return (k==="pct"||k==="rating")? +(v*100).toFixed(4) : v; }
+function fromDisplay(f,v){ const k=META[f]?.kind; return (k==="pct"||k==="rating")? v/100 : v; }
+function unit(f){ const k=META[f]?.kind; return k==="pct"||k==="rating"?(k==="rating"?"/100":"%"):k==="money"?S.currency:k==="months"?"mo":k==="month"?"":""; }
+function numBox(id,f,v,attrs=""){
+  return `<div class="inbox"><input id="${id}" inputmode="decimal" type="number" step="any" value="${toDisplay(f,v)}" data-field="${f}" ${attrs}>${unit(f)?`<span class="u">${unit(f)}</span>`:""}</div>`;
+}
+
+function renderInputs(){
+  // Market
+  const mk=document.getElementById("market-fields");
+  mk.innerHTML = `
+    <div class="field" style="grid-column:1/-1"><label for="in-name">Scenario name</label><input class="plain" id="in-name" value="${esc(S.name)}"></div>
+    <div class="field"><label for="in-currency">Currency</label><select class="plain" id="in-currency">${Object.keys(CURRENCIES).map(c=>`<option ${c===S.currency?"selected":""}>${c}</option>`).join("")}</select></div>
+    <div class="field"><label for="in-horizon">Planning horizon</label><div class="inbox"><input id="in-horizon" type="number" min="6" max="120" step="1" value="${S.horizon_months}"><span class="u">months</span></div></div>
+    ${MARKET_FIELDS.map(f=>`<div class="field"><label for="mk-${f}">${META[f].label}</label>${numBox("mk-"+f,f,S.market[f],'data-scope="market"')}</div>`).join("")}`;
+  // Routes matrix
+  const n=S.routes.length;
+  let h=`<thead><tr><th scope="col"><span class="eyebrow">Input</span></th>`;
+  S.routes.forEach((r,i)=>{ h+=`<th scope="col"><div class="route-head"><span class="swatch" style="background:${color(i)}"></span><input id="rt-${i}-label" aria-label="Route ${i+1} name" value="${esc(r.label)}" data-route="${i}" data-field="label">${n>MIN_ROUTES?`<button class="x" type="button" data-remove="${i}" aria-label="Remove ${esc(r.label)}">×</button>`:""}</div></th>`; });
+  h+=`</tr></thead><tbody>`;
+  for(const [g,fs] of ROUTE_GROUPS){
+    h+=`<tr class="grp"><td colspan="${n+1}"><span class="eyebrow">${g}</span></td></tr>`;
+    for(const f of fs){
+      h+=`<tr><th scope="row">${META[f].label}<small>${META[f].hint}</small></th>`;
+      S.routes.forEach((r,i)=>{ h+=`<td>${numBox(`rt-${i}-${f}`,f,r[f],`data-route="${i}" aria-label="${esc(r.label)} ${META[f].label}"`)}</td>`; });
+      h+=`</tr>`;
+    }
+  }
+  document.getElementById("matrix").innerHTML=h+`</tbody>`;
+  document.getElementById("btn-add").disabled = n>=MAX_ROUTES;
+  // Weights
+  document.getElementById("weights").innerHTML = DIMS.map(d=>`
+    <div class="wrow"><label for="w-${d}-r">${d[0].toUpperCase()+d.slice(1)}</label>
+      <input type="range" id="w-${d}-r" min="0" max="100" step="1" value="${Math.round(S.weights[d]*100)}" data-weight="${d}">
+      <div class="inbox"><input id="w-${d}" type="number" min="0" max="100" step="1" value="${Math.round(S.weights[d]*100)}" data-weight="${d}" aria-label="${d} weight"></div>
+      <span class="share num" id="w-${d}-share"></span></div>`).join("");
+  // Downside
+  document.getElementById("downside-fields").innerHTML = DOWNSIDE_FIELDS.map(f=>`<div class="field"><label for="dn-${f}">${META[f].label}</label>${numBox("dn-"+f,f,S.downside[f],'data-scope="downside"')}</div>`).join("");
+  // Anchors
+  let a=`<thead><tr><th>Dimension</th><th>Metric</th><th>Worst (0)</th><th>Best (100)</th><th>Weight</th></tr></thead><tbody>`;
+  for(const d of DIMS) METRICS[d].forEach((m,j)=>{ const x=S.anchors[d][m];
+    a+=`<tr><td>${j===0?d[0].toUpperCase()+d.slice(1):""}</td><td>${METRIC_LABELS[m]}</td>`+
+      ["worst","best","weight"].map(k=>`<td><div class="inbox"><input id="an-${m}-${k}" type="number" step="any" value="${x[k]}" data-anchor="${d}.${m}.${k}" aria-label="${METRIC_LABELS[m]} ${k}"></div></td>`).join("")+`</tr>`; });
+  document.getElementById("anchors").innerHTML=a+`</tbody>`;
+  updateWeightShares();
+}
+function updateWeightShares(){ const w=normalise(S.weights); for(const d of DIMS){ const el=document.getElementById(`w-${d}-share`); if(el) el.textContent=pct(w[d]); } }
+
+document.addEventListener("input",e=>{
+  const t=e.target, v=parseFloat(t.value);
+  if(t.id==="in-name"){ S.name=t.value; return schedule(); }
+  if(t.id==="in-currency"){ S.currency=t.value; renderInputs(); return schedule(); }
+  if(t.id==="in-horizon"){ if(isFinite(v)) S.horizon_months=clip(Math.round(v),6,120); return schedule(); }
+  if(t.dataset.weight){ if(!isFinite(v)) return; const d=t.dataset.weight; S.weights[d]=clip(v,0,100)/100;
+    const other=document.getElementById(t.type==="range"?`w-${d}`:`w-${d}-r`); if(other) other.value=Math.round(S.weights[d]*100);
+    updateWeightShares(); return schedule(); }
+  if(t.dataset.anchor){ if(!isFinite(v)) return; const [d,m,k]=t.dataset.anchor.split("."); S.anchors[d][m][k]=v; return schedule(); }
+  const f=t.dataset.field; if(!f) return;
+  if(t.dataset.route!==undefined){ const r=S.routes[+t.dataset.route];
+    if(f==="label"){ r.label=t.value; return schedule(); }
+    if(isFinite(v)) r[f]=fromDisplay(f,v); return schedule(); }
+  if(t.dataset.scope && isFinite(v)){ S[t.dataset.scope][f]=fromDisplay(f,v); return schedule(); }
+});
+document.addEventListener("click",e=>{
+  const rm=e.target.closest("[data-remove]");
+  if(rm){ S.routes.splice(+rm.dataset.remove,1); renderInputs(); schedule(); }
+});
+document.getElementById("btn-add").addEventListener("click",()=>{
+  if(S.routes.length>=MAX_ROUTES) return;
+  const r=structuredClone(EXAMPLE.routes[1]); r.label=`Route ${S.routes.length+1}`;
+  S.routes.push(r); renderInputs(); schedule();
+  document.getElementById(`rt-${S.routes.length-1}-label`)?.select();
+});
+document.getElementById("btn-example").addEventListener("click",()=>{ S=structuredClone(EXAMPLE); renderInputs(); schedule(); toast("Example loaded"); });
+document.getElementById("btn-json").addEventListener("click",()=>{ const p=document.getElementById("json-panel"); p.hidden=!p.hidden; if(!p.hidden) document.getElementById("json-text").value=JSON.stringify(S,null,2); });
+document.getElementById("btn-copy").addEventListener("click",async()=>{
+  const ta=document.getElementById("json-text"); ta.value=JSON.stringify(S,null,2);
+  try{ await navigator.clipboard.writeText(ta.value); toast("Copied"); }catch(e){ ta.focus(); ta.select(); toast("Selected. Press Ctrl+C or ⌘C to copy"); }
+});
+document.getElementById("btn-apply").addEventListener("click",()=>{
+  const msg=document.getElementById("json-msg");
+  try{ S=validateShape(JSON.parse(document.getElementById("json-text").value)); renderInputs(); schedule(); msg.textContent=""; toast("Scenario applied"); }
+  catch(err){ msg.textContent=`Could not apply: ${err.message}`; msg.style.color="var(--bad)"; }
+});
+let tt; function toast(t){ const el=document.getElementById("toast"); el.textContent=t; el.hidden=false; clearTimeout(tt); tt=setTimeout(()=>el.hidden=true,1800); }
+
+/* ---------- Validation ---------- */
+function problems(){
+  const errs=[], warns=[];
+  const m=S.market;
+  if(!(m.annual_price_per_customer>0)) errs.push("Price per customer must be above zero.");
+  if(!(m.annual_market_size>0)) errs.push("Market size must be above zero.");
+  if(DIMS.every(d=>!(S.weights[d]>0))) errs.push("At least one weight must be above zero.");
+  if(!(S.downside.partner_loss_recovery_months>0)) errs.push("Months to replace the lost partner must be above zero.");
+  S.routes.forEach((r,i)=>{
+    if(!(r.ramp_months>0)) errs.push(`${L(i)}: ramp must be at least one month.`);
+    if(r.months_to_first_revenue<r.onboarding_months) warns.push(`${L(i)}: first revenue comes before onboarding ends. Check the timing.`);
+    for(const f of ROUTE_FIELDS) if(FRACTIONS.has(f)&&(r[f]<0||r[f]>1)) errs.push(`${L(i)}: ${META[f].label.toLowerCase()} must be between 0 and 100.`);
+    if(r.channel_take>=m.gross_margin) warns.push(`${L(i)}: channel take is at or above gross margin, so every sale loses money.`);
+  });
+  for(const d of DIMS) for(const mt of METRICS[d]){ const a=S.anchors[d][mt]; if(a.best===a.worst) errs.push(`Anchor for ${METRIC_LABELS[mt].toLowerCase()}: best and worst must differ.`); }
+  return {errs,warns};
+}
+
+/* ---------- Rendering results ---------- */
+let pending=0;
+function schedule(){ cancelAnimationFrame(pending); pending=requestAnimationFrame(()=>{ save(); recompute(); }); }
+
+function recompute(){
+  const {errs,warns}=problems();
+  document.getElementById("issues").innerHTML = errs.map(e=>`<div class="issue"><span>${e}</span></div>`).join("")+warns.map(e=>`<div class="issue warn"><span>${e}</span></div>`).join("");
+  if(errs.length){ document.getElementById("verdict").innerHTML=`<div class="kicker"><span class="pill bad">Fix the inputs above</span></div><h2>Scores will update once the inputs are valid.</h2>`; return; }
+  A=analyse(S);
+  renderVerdict(); renderScores(); renderCash(); renderRec(); renderTornado(); renderFin(); renderWorkings();
+}
+
+function renderVerdict(){
+  const {res,fin,stressed,share}=A, w=res.winner, b=fin.base[w];
+  const holds = stressed.winner===w;
+  const firm = res.lead>=5 && share[w]>=0.4 && holds;
+  const status = firm?`<span class="pill good">Clear winner</span>`:res.lead<2?`<span class="pill bad">Too close to call</span>`:`<span class="pill warn">Winner, check the sensitivities</span>`;
+  document.getElementById("verdict").innerHTML=`
+    <div class="kicker"><span class="eyebrow">Recommended route</span>${status}</div>
+    <h2>Enter through the <em>${L(w).toLowerCase()}</em>. It scores ${res.totals[w].toFixed(1)} against ${res.totals[res.runnerUp].toFixed(1)} for the ${L(res.runnerUp).toLowerCase()}.</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="eyebrow">Lead over #2</div><div class="v">+${res.lead.toFixed(1)}</div><div class="s">VMR points</div></div>
+      <div class="kpi"><div class="eyebrow">Wins across weightings</div><div class="v">${pct(share[w])}</div><div class="s">of all weight mixes</div></div>
+      <div class="kpi"><div class="eyebrow">Breakeven</div><div class="v">${isFinite(b.projected)?"M"+Math.round(b.projected):"—"}</div><div class="s">${isFinite(b.projected)?(b.projected>S.horizon_months?"projected past horizon":"within horizon"):"still losing money"}</div></div>
+      <div class="kpi"><div class="eyebrow">Peak funding</div><div class="v">${money(b.peakFunding)}</div><div class="s">deepest cash hole</div></div>
+      <div class="kpi"><div class="eyebrow">Downside case</div><div class="v">${holds?"Holds":"#"+(stressed.ranking.indexOf(w)+1)}</div><div class="s">${holds?"still ranks first":L(stressed.winner)+" ranks first"}</div></div>
+    </div>`;
+}
+
+function renderScores(){
+  const {res}=A, order=res.ranking, W=640, rowH=40, top=6, left=150, right=56, H=top+order.length*rowH+26;
+  const x=v=>left+(W-left-right)*v/100;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Stacked VMR score by route">`;
+  for(let t=0;t<=100;t+=20){ s+=`<line x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${H-22}" style="stroke:var(--grid)"/><text x="${x(t)}" y="${H-6}" text-anchor="middle">${t}</text>`; }
+  order.forEach((ri,k)=>{
+    const y=top+k*rowH+6, bh=rowH-14; let acc=0;
+    s+=`<text x="${left-10}" y="${y+bh/2+4}" text-anchor="end" style="fill:var(--ink);font-weight:${k===0?600:400}">${L(ri)}</text>`;
+    DIMS.forEach((d,j)=>{
+      const pts=res.dims[ri][d]*res.weights[d], x0=x(acc), wpx=Math.max(0,x(acc+pts)-x0);
+      const key=["dv","dm","dr"][j];
+      s+=`<rect x="${x0}" y="${y}" width="${Math.max(0,wpx-2)}" height="${bh}" rx="3" style="fill:var(--${key})"><title>${L(ri)} · ${d}: ${res.dims[ri][d].toFixed(1)} × ${pct(res.weights[d])} = ${pts.toFixed(1)} points</title></rect>`;
+      if(wpx>26) s+=`<text x="${x0+wpx/2-1}" y="${y+bh/2+4}" text-anchor="middle" style="fill:var(--${key}-t);font-family:var(--mono)">${pts.toFixed(0)}</text>`;
+      acc+=pts;
+    });
+    s+=`<text class="lbl-strong" x="${x(acc)+6}" y="${y+bh/2+4}">${res.totals[ri].toFixed(1)}</text>`;
+  });
+  document.getElementById("score-chart").innerHTML=s+`</svg>`;
+  document.getElementById("score-legend").innerHTML=DIMS.map((d,j)=>`<span><i class="box" style="background:var(--${["dv","dm","dr"][j]})"></i>${d[0].toUpperCase()+d.slice(1)} (${pct(res.weights[d])})</span>`).join("");
+  let t=`<thead><tr><th>Route</th><th>Velocity</th><th>Margin</th><th>Robustness</th><th>VMR total</th></tr></thead><tbody>`;
+  order.forEach((ri,k)=>{ t+=`<tr class="${k===0?"win":""}"><td><span class="rank">${k+1}</span>${L(ri)}</td>${DIMS.map(d=>`<td>${res.dims[ri][d].toFixed(1)}</td>`).join("")}<td><b>${res.totals[ri].toFixed(1)}</b></td></tr>`; });
+  document.getElementById("score-table").innerHTML=t+`</tbody>`;
+}
+
+function niceTicks(lo,hi,n=5){ const span=hi-lo||1, step0=span/n, mag=10**Math.floor(Math.log10(step0)), f=step0/mag, step=(f<1.5?1:f<3?2:f<7?5:10)*mag; const out=[]; for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step) out.push(v); return out; }
+function renderCash(){
+  const {fin}=A, H=S.horizon_months, W=640, Ht=280, l=62, r=14, t=10, b=28;
+  let lo=0, hi=0; fin.base.concat(fin.down).forEach(f=>f.cumulative.forEach(v=>{lo=Math.min(lo,v);hi=Math.max(hi,v);}));
+  const pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad;
+  const X=m=>l+(W-l-r)*(m-1)/Math.max(1,H-1), Y=v=>t+(Ht-t-b)*(hi-v)/(hi-lo);
+  let s=`<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Cumulative cash by route over ${H} months">`;
+  for(const v of niceTicks(lo,hi)) s+=`<line x1="${l}" x2="${W-r}" y1="${Y(v)}" y2="${Y(v)}" style="stroke:var(--grid)"/><text x="${l-8}" y="${Y(v)+4}" text-anchor="end">${money(v)}</text>`;
+  const step=H<=24?3:H<=60?6:12;
+  for(let m=step;m<=H;m+=step) s+=`<text x="${X(m)}" y="${Ht-8}" text-anchor="middle">${m}</text>`;
+  s+=`<line x1="${l}" x2="${W-r}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--ink-3);stroke-width:1"/>`;
+  const line=(arr,style)=>`<polyline points="${arr.map((v,i)=>`${X(i+1).toFixed(1)},${Y(v).toFixed(1)}`).join(" ")}" style="fill:none;${style}"/>`;
+  fin.down.forEach((f,i)=>s+=line(f.cumulative,`stroke:${color(i)};stroke-width:1.5;stroke-dasharray:5 4;opacity:.85`));
+  fin.base.forEach((f,i)=>s+=line(f.cumulative,`stroke:${color(i)};stroke-width:2.2`));
+  fin.base.forEach((f,i)=>{ if(f.breakeven) s+=`<circle cx="${X(f.breakeven)}" cy="${Y(f.cumulative[f.breakeven-1])}" r="4.5" style="fill:${color(i)};stroke:var(--panel);stroke-width:2"/>`; });
+  s+=`<line id="cash-x" x1="0" x2="0" y1="${t}" y2="${Ht-b}" style="stroke:var(--ink-3);stroke-width:1" visibility="hidden"/>`;
+  s+=`<rect id="cash-hit" x="${l}" y="${t}" width="${W-l-r}" height="${Ht-t-b}" style="fill:transparent"/>`;
+  const el=document.getElementById("cash-chart"); el.innerHTML=s+`</svg><div class="tip" id="cash-tip" hidden></div>`;
+  document.getElementById("cash-legend").innerHTML=S.routes.map((_,i)=>`<span><i style="background:${color(i)}"></i>${L(i)}</span>`).join("")+`<span style="color:var(--ink-3)">● breakeven</span>`;
+  const svg=el.querySelector("svg"), hit=el.querySelector("#cash-hit"), xl=el.querySelector("#cash-x"), tip=el.querySelector("#cash-tip");
+  const move=ev=>{
+    const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY; const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+    const m=clip(Math.round(1+(p.x-l)/(W-l-r)*(H-1)),1,H);
+    xl.setAttribute("x1",X(m)); xl.setAttribute("x2",X(m)); xl.setAttribute("visibility","visible");
+    tip.innerHTML=`<div class="eyebrow" style="margin-bottom:4px">Month ${m}</div>`+fin.base.map((f,i)=>`<div class="row"><span><i class="swatch" style="background:${color(i)}"></i>${L(i)}</span><b>${money(f.cumulative[m-1])}</b></div>`).join("")+`<div class="hint" style="margin-top:4px">Downside: ${fin.down.map(f=>money(f.cumulative[m-1])).join(" · ")}</div>`;
+    tip.hidden=false;
+    const box=el.getBoundingClientRect(), px=(X(m)/W)*box.width;
+    tip.style.left = (px>box.width*0.6 ? px-tip.offsetWidth-12 : px+12)+"px"; tip.style.top="8px";
+  };
+  hit.addEventListener("pointermove",move); hit.addEventListener("pointerdown",move);
+  hit.addEventListener("pointerleave",()=>{ tip.hidden=true; xl.setAttribute("visibility","hidden"); });
+}
+
+function conditions(){
+  const {res,flips,thresholds,stressed}=A, out=[];
+  for(const f of flips) out.push({text:`${f.dim[0].toUpperCase()+f.dim.slice(1)} weight ${f.dir==="up"?"above":"below"} ${pct(f.w)} (now ${pct(f.def)})`,win:f.win,kind:"weight"});
+  const moved=new Set();
+  for(const t of thresholds) for(const dir of ["down","up"]){ const x=t[dir]; if(!x) continue; moved.add(t);
+    const f=t.path[t.path.length-1];
+    const move=`${phrase(t.path)} is ${Math.round(Math.abs(x.change)*100)}% ${x.change>0?"higher":"lower"} than entered`;
+    out.push({text:`${move} (${fmtInput(f,t.value)} to ${fmtInput(f,t.value*(1+x.change))})`,move,win:x.win,kind:"input",change:x.change}); }
+  for(const t of thresholds) if(!moved.has(t)) out.push({text:`the ranking holds for any change in ${phrase(t.path)} up to ±${pct(SENS.flip_search_max)}`,win:null,kind:"hold"});
+  const d=S.downside, desc=`market ${spct(d.market_shock)}, main partner lost in month ${Math.round(d.partner_loss_month)}`;
+  if(stressed.winner===res.winner) out.push({text:`Downside case (${desc}): it still ranks first`,win:null,kind:"down"});
+  else out.push({text:`Downside case (${desc}), where it drops to #${stressed.ranking.indexOf(res.winner)+1}`,win:stressed.winner,kind:"down"});
+  return out;
+}
+const cap=t=>t[0].toUpperCase()+t.slice(1);
+function renderRec(){
+  const {res,fin,share}=A, w=res.winner, ru=res.runnerUp, H=S.horizon_months, b=fin.base[w], d=fin.down[w];
+  const diff=Object.fromEntries(DIMS.map(k=>[k,(res.dims[w][k]-res.dims[ru][k])*res.weights[k]]));
+  const ahead=DIMS.filter(k=>diff[k]>0).map(k=>`${diff[k].toFixed(1)} on ${cap(k)}`).join(" and ");
+  const behind=DIMS.filter(k=>diff[k]<0).map(k=>`${(-diff[k]).toFixed(1)} on ${cap(k)}`).join(" and ");
+  const why=[
+    `Against the runner-up (${L(ru)}) it gains ${ahead||"nothing"}${behind?`, and gives up ${behind}`:""} (weighted points).`,
+    `It breaks even at ${monthTxt(b.projected,H)}, needs peak funding of ${money(b.peakFunding)} and runs at a ${pct(b.runRate)} cash margin by month ${H}.`,
+    `It ranks first in ${pct(share[w])} of all possible Velocity/Margin/Robustness weightings.`,
+  ];
+  const conds=conditions();
+  const moves=conds.filter(c=>c.kind==="input");
+  const fragile=moves.length?moves.reduce((a,c)=>Math.abs(c.change)<Math.abs(a.change)?c:a):null;
+  const rows=A.res.workings.filter(x=>x.route===w&&x.dim==="robustness");
+  const weakest=rows.reduce((a,x)=>x.score<a.score?x:a);
+  const r=S.routes[w];
+  const robust={
+    downside_revenue_retention:`Downside exposure: in the downside case it keeps only ${pct(retention(b,d))} of base-case revenue.`,
+    concentration_risk:`Concentration: rated ${Math.round(r.concentration_risk*100)}/100; a few accounts or channels carry most of the volume.`,
+    partner_dependency:`Partner dependency: ${pct(r.partner_dependency)} of revenue runs through the largest intermediary; losing it removes that revenue for about ${Math.round(S.downside.partner_loss_recovery_months)} months.`,
+    lock_in_months:`Lock-in: the contract binds for ${Math.round(r.lock_in_months)} months, which limits a switch if the route under-delivers.`,
+  }[weakest.metric];
+  const risks=[
+    fragile?`Assumption risk: if ${fragile.move}, ${L(fragile.win)} overtakes.`:`Assumption risk: none of the three most sensitive inputs flips the ranking within ±${pct(SENS.flip_search_max)}.`,
+    `Cash exposure: cumulative cash bottoms at ${money(-b.peakFunding)} and breakeven comes at ${monthTxt(b.projected,H)}; in the downside case it moves to ${monthTxt(d.projected,H)}.`,
+    robust,
+  ];
+  const toRu=conds.filter(c=>c.win===ru);
+  const fb=toRu.find(c=>c.kind==="input")||toRu[0];
+  const review=r.months_to_first_revenue+r.ramp_months/2;
+  const next=[
+    `Test the two assumptions that move the ranking most: ${A.torn.slice(0,2).map(t=>phrase(t.path)).join(" and ")}.`,
+    `Set a go/no-go review at month ${Math.round(review)}, half-way through the ramp, against the planned revenue curve.`,
+    `Keep the ${L(ru).toLowerCase()} as the fallback${fb?`. It becomes the better route if ${fb.text.replace(/^./,c=>c.toLowerCase())}.`:"."}`,
+  ];
+  document.getElementById("rec").innerHTML=`
+    <div><h3>Why it wins</h3><ul class="cond">${why.map(x=>`<li>${x}</li>`).join("")}</ul></div>
+    <div class="two">
+      <div><h3>When it stops winning</h3><ul class="cond">${conds.map(c=>`<li>${cap(c.text)}${c.win!==null?`: <b>${L(c.win)}</b> ranks first`:""}.</li>`).join("")}</ul></div>
+      <div><h3>Top three risks</h3><ol class="cond">${risks.map(x=>`<li>${x}</li>`).join("")}</ol>
+        <h3 style="margin-top:14px">Next steps</h3><ol class="cond">${next.map(x=>`<li>${x}</li>`).join("")}</ol></div>
+    </div>`;
+}
+
+function renderTornado(){
+  const {torn,res}=A, rows=torn.slice(0,10), base=res.lead, W=640, rowH=26, l=230, r=16, t=6, b=28, H=t+rows.length*rowH+b;
+  let lo=Math.min(0,base), hi=Math.max(0,base); rows.forEach(x=>{lo=Math.min(lo,x.leadLow,x.leadHigh);hi=Math.max(hi,x.leadLow,x.leadHigh);});
+  const pad=(hi-lo)*0.05||1; lo-=pad; hi+=pad;
+  const X=v=>l+(W-l-r)*(v-lo)/(hi-lo);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tornado chart of the winner's lead">`;
+  for(const v of niceTicks(lo,hi,6)) s+=`<line x1="${X(v)}" x2="${X(v)}" y1="${t}" y2="${H-b}" style="stroke:var(--grid)"/><text x="${X(v)}" y="${H-10}" text-anchor="middle">${+v.toFixed(1)}</text>`;
+  rows.forEach((x,k)=>{
+    const y=t+k*rowH+4, bh=rowH-9;
+    s+=`<text x="${l-10}" y="${y+bh/2+4}" text-anchor="end" style="fill:var(--ink)">${esc(pathLabel(x.path))}</text>`;
+    for(const [v,key,lab] of [[x.leadLow,"low","−"],[x.leadHigh,"high","+"]]){
+      const a=Math.min(X(base),X(v)), wpx=Math.abs(X(v)-X(base));
+      s+=`<rect x="${a}" y="${y}" width="${wpx}" height="${bh}" rx="2" style="fill:var(--${key})"><title>${esc(pathLabel(x.path))} ${lab}${pct(SENS.tornado_swing)}: lead ${v.toFixed(1)}${v<0?` (${L(key==="low"?x.winLow:x.winHigh)} wins)`:""}</title></rect>`;
+    }
+  });
+  s+=`<line x1="${X(base)}" x2="${X(base)}" y1="${t}" y2="${H-b}" style="stroke:var(--ink-2);stroke-width:1.2"/>`;
+  s+=`<line x1="${X(0)}" x2="${X(0)}" y1="${t}" y2="${H-b}" style="stroke:var(--bad);stroke-width:1.2;stroke-dasharray:4 3"/>`;
+  document.getElementById("tornado").innerHTML=s+`</svg>`;
+  document.getElementById("tornado-hint").textContent=`${L(res.winner).replace(/&amp;/g,"&")}'s lead over the next-best route (points), each input moved ±${pct(SENS.tornado_swing)}`;
+  document.getElementById("tornado-legend").innerHTML=`<span><i class="box" style="background:var(--low)"></i>Input −${pct(SENS.tornado_swing)}</span><span><i class="box" style="background:var(--high)"></i>Input +${pct(SENS.tornado_swing)}</span><span><i style="background:var(--ink-2)"></i>Current lead ${base.toFixed(1)}</span><span><i style="background:var(--bad)"></i>Ranking flips left of the dashed line</span>`;
+}
+
+function renderFin(){
+  const {fin,res,stressed}=A, H=S.horizon_months;
+  let t=`<thead><tr><th>Route</th><th>${H}-mo revenue</th><th>Breakeven</th><th>Peak funding</th><th>Run-rate margin</th><th>Downside revenue kept</th><th>Downside breakeven</th><th>Rank base → downside</th></tr></thead><tbody>`;
+  res.ranking.forEach((i,k)=>{ const b=fin.base[i], d=fin.down[i];
+    t+=`<tr class="${k===0?"win":""}"><td>${L(i)}</td><td>${money(b.total)}</td><td>${monthTxt(b.projected,H).replace("month ","M")}</td><td>${money(b.peakFunding)}</td><td>${isFinite(b.runRate)?pct(b.runRate):"—"}</td><td>${pct(retention(b,d))}</td><td>${monthTxt(d.projected,H).replace("month ","M")}</td><td>${k+1} → ${stressed.ranking.indexOf(i)+1}</td></tr>`; });
+  document.getElementById("fin-table").innerHTML=t+`</tbody>`;
+}
+
+function renderWorkings(){
+  const {res}=A;
+  const fv=(m,v)=>{ if(!isFinite(v)) return v>0?"∞":"−∞"; if(["run_rate_margin","cumulative_margin","downside_revenue_retention","concentration_risk","partner_dependency"].includes(m)) return pct(v); return v.toFixed(1); };
+  let t=`<thead><tr><th>Route · metric</th><th>Value</th><th>Worst</th><th>Best</th><th>Score</th><th>Weight</th><th>Points</th></tr></thead><tbody>`;
+  res.ranking.forEach(i=>{ for(const d of DIMS){
+    t+=`<tr><td colspan="7" style="background:var(--sunk);font-weight:600">${L(i)} · ${cap(d)} <span class="num" style="float:right">${res.dims[i][d].toFixed(1)}</span></td></tr>`;
+    res.workings.filter(x=>x.route===i&&x.dim===d).forEach(x=>{ t+=`<tr><td style="padding-left:18px;font-weight:400">${METRIC_LABELS[x.metric]}</td><td>${fv(x.metric,x.value)}</td><td>${fv(x.metric,x.worst)}</td><td>${fv(x.metric,x.best)}</td><td>${x.score.toFixed(1)}</td><td>${pct(x.weight)}</td><td>${x.contribution.toFixed(1)}</td></tr>`; });
+  }});
+  document.getElementById("workings").innerHTML=t+`</tbody>`;
+}
+
+renderInputs();
+recompute();
+</script>
+</body>
+</html>
